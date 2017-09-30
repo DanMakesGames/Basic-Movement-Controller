@@ -12,7 +12,7 @@ UTacMoveComp::UTacMoveComp()
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
-	maxMoveSpeed = 50;
+	maxMoveSpeed = 100;
 	maxRotationSpeed = 100;
 	moveState = MOVE_STATE::FALLING;
 	//moveState = MOVE_STATE::WALKING;
@@ -91,9 +91,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		newVector = velocity + FVector(0, 0, -100);
 	}
 	//FVector newVector = velocity;
-	//bool bHitOccur;
-
-	//TDODO CHECK PENETRATION, and solve
+	
 
 	//--Move---------------------
 	//Hit did occur
@@ -135,10 +133,19 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	float time = 1.0f;
 	TArray<FHitResult> outHits;
 	FComponentQueryParams outParams(FName(TEXT("DUDE")), GetOwner());
-
+	
+	GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, capsuleComponent->GetComponentQuat() * NewRotation, outParams);
+	if (outHits.Num() > 0)
+	{
+		if (outHits[0].bStartPenetrating)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Correction"));
+			capsuleComponent->SetWorldLocation(outHits[0].ImpactPoint + outHits[0].ImpactNormal * outHits[0].PenetrationDepth);
+		}
+	}
+	
 	GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, capsuleComponent->GetComponentQuat() * NewRotation, outParams);
 
-	
 
 	/* Loop through, looking for a valid blocking hit. These hits must have normals facing
 	 * the same direction as the velocity, then set the value of the outHit*/
@@ -147,10 +154,14 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 		//DrawDebugDirectionalArrow(GetWorld(), outHits[i].ImpactPoint, outHits[i].ImpactPoint + outHits[i].ImpactNormal * 100, 10, FColor::Red,false, 100,100,10);
 		//DrawDebugLine(GetWorld(), outHits[i].ImpactPoint, outHits[i].ImpactPoint + outHits[i].ImpactNormal * 100, FColor::Cyan,false, 100 , 100, 10);
 		//No-Blocking hit
-		UE_LOG(LogTemp, Warning, TEXT("Hit angle dep:%f, cos %f , %f"), outHits[i].PenetrationDepth,acos(FVector::DotProduct(outHits[i].Normal, Delta.GetSafeNormal())) * (180 / PI), atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) * (180 / PI));
-
+		//UE_LOG(LogTemp, Warning, TEXT("Hit angle dep:%f, cos %f , %f"), outHits[i].PenetrationDepth,acos(FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal())) * (180 / PI), atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) * (180 / PI));
+		//UE_LOG(LogTemp, Warning, TEXT("Hit angle dep:%f, cos %f , %f"), outHits[i].PenetrationDepth,FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()), atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) * (180 / PI));
+		//UE_LOG(LogTemp, Warning, TEXT("Hit angle dep:%f, cos %s , %s"), outHits[i].PenetrationDepth, *outHits[i].Normal.ToString(), *Delta.GetSafeNormal().ToString());
+		UE_LOG(LogTemp, Warning, TEXT("Hit angle dep:%f, cos %f , %f"), outHits[i].PenetrationDepth,FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()), atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) * (180 / PI));
 		//if ( acos(FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) <= (PI / 2.0f) )
-		if (atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) <= (PI / 2.0f))
+		//if (atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) <= (PI / 2.0f))
+		//if (acos(FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal())) <= (PI / 2.0f))
+		if (FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()) >= 0 )
 		{
 			//do nothing?
 			UE_LOG(LogTemp, Warning, TEXT("LESS THAN"));
@@ -179,9 +190,12 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 			bComplete = false;
 			break;
 		}
+		
 	}
 
-	capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time));
+	//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) - (Delta.GetSafeNormal() * 0.0001f));
+	capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) + OutHit.ImpactNormal * 0.001f);
+	//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) );
 
 	capsuleComponent->SetWorldRotation(capsuleComponent->GetComponentQuat() * NewRotation);
 
