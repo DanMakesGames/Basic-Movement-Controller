@@ -49,7 +49,7 @@ private:
 	
 	FVector velocity;
 	FRotator rotationVelocity;
-
+	FVector inputVelocity;
 
 
 	//MovementComponent::MoveUpdatedComponent(const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult* OutHit, ETeleportType Teleport)
