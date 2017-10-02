@@ -43,6 +43,7 @@ protected:
 public:	
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	static double CutOff(double value, int place);
 
 private:
 	UCapsuleComponent* capsuleComponent;
@@ -50,6 +51,8 @@ private:
 	FVector velocity;
 	FRotator rotationVelocity;
 	FVector inputVelocity;
+
+	int FLOOR_DETECTION_PERCISION;
 
 
 	//MovementComponent::MoveUpdatedComponent(const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult* OutHit, ETeleportType Teleport)

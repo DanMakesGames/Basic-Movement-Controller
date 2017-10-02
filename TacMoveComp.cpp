@@ -10,14 +10,16 @@
 #define TOUCH_TOLERANCE 0.001f // Distance we set from an object after a blocking collision
 #define MAX_FLOOR_DIST 1 // greatest distance we can be from the floor before we consider it falling
 // Sets default values for this component's properties
+
 UTacMoveComp::UTacMoveComp()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
+
 	PrimaryComponentTick.bCanEverTick = true;
 	maxMoveSpeed = 70;
 	maxRotationSpeed = 100;
 	moveState = MOVE_STATE::FALLING;
+
+	FLOOR_DETECTION_PERCISION = 4;
 	//moveState = MOVE_STATE::WALKING;
 	
 
@@ -25,7 +27,6 @@ UTacMoveComp::UTacMoveComp()
 }
 
 
-// Called when the game starts
 void UTacMoveComp::BeginPlay()
 {
 	Super::BeginPlay();
@@ -35,7 +36,6 @@ void UTacMoveComp::BeginPlay()
 }
 
 
-// Called every frame
 void UTacMoveComp::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
@@ -44,42 +44,40 @@ void UTacMoveComp::TickComponent(float DeltaTime, ELevelTick TickType, FActorCom
 
 }
 
-//void SetVelocity(const FVector& inVelocity);
+
 void UTacMoveComp::SetVelocity(const FVector& inVelocity)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("MoveForward: %f"), val);
-	//UE_LOG(LogTemp, Warning, TEXT("Mii %s"), *inVelocity.ToString());
-	//UE_LOG(LogTemp, Warning, TEXT(inVelocity.ToString()));
 	if (moveState == MOVE_STATE::WALKING)
 	{
 		inputVelocity = inVelocity;
 	}
 }
 
-//FVector GetVelocity();
+
 FVector UTacMoveComp::GetVelocity()
 {
 	return inputVelocity;
 }
 
+
 void UTacMoveComp::SetRotationVelocity(const FRotator& inVelocity)
 {
 	rotationVelocity = inVelocity;
 }
+
+
 FRotator UTacMoveComp::GetRotationVelocity()
 {
 	return rotationVelocity;
 }
 
 
-
 bool UTacMoveComp::performMovement(float DeltaTime)
 {
 	FHitResult hit;
 	FVector newVector;
-	//SHould I apply rotation first or second
-	//UE_LOG(LogTemp, Warning, TEXT("Velocit: %s"), *velocity.ToString());
-	FQuat newRotation =capsuleComponent->GetComponentQuat() * (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion();
+
+	FQuat newRotation = capsuleComponent->GetComponentQuat() * (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion();
 	//Standard motion
 	if (moveState == WALKING)
 	{
@@ -92,7 +90,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 	else if (moveState == FALLING)
 	{
 		
-		newVector = velocity + FVector(0, 0, -0.5) * maxMoveSpeed;
+		newVector = velocity + FVector(0, 0, -1) * maxMoveSpeed;
 
 	}
 
@@ -102,15 +100,38 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 	//Hit did occur
 	if ( !Move(newVector * DeltaTime, (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion(), hit ) )
 	{
+		
 		//Evaluate if the ground is good enough to walk on:
 		//yes this is ground
-		if (hit.ImpactPoint.Z <= (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
+
+		//UE_LOG(LogTemp, Warning, TEXT("Is Floor time: My Method %f, %f"), (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z, (capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z);
+		//if (hit.ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
+		//if (hit.ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z)
+		if (CutOff(hit.ImpactPoint.Z, 4) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4))
 		{
+
+			UE_LOG(LogTemp, Warning, TEXT("Is Floor hitpoint: %f, %f"), CutOff(hit.ImpactPoint.Z, 4), CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4));
+			DrawDebugPoint(GetWorld(),hit.ImpactPoint,50,FColor::Cyan,false,10);
 			if (moveState == MOVE_STATE::FALLING)
 			{
-				//UE_LOG(LogTemp, Warning, TEXT("Setting Walking"));
+				
 				moveState = MOVE_STATE::WALKING;
 			}
+		}
+		// Hit Object is not ground. This will need to be modified for slopes
+		else
+		{
+			// SLIDE ALONG WALL
+			if (moveState == MOVE_STATE::WALKING)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Sliding time: %f"), hit.Time);
+				
+				FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, FVector(0, 0, 1)).GetSafeNormal();
+				DrawDebugDirectionalArrow(GetWorld(),capsuleComponent->GetComponentLocation() - FVector(0, 0, 10), capsuleComponent->GetComponentLocation() + travelDirection * 100 - FVector(0,0,10),50,FColor::Cyan,false, 10);
+				newVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(),travelDirection)) * travelDirection;
+				Move(newVector, (rotationVelocity * DeltaTime * maxRotationSpeed * (1 - hit.Time)).Quaternion(), hit);
+			}
+
 		}
 	}
 	//Hit did not occur
@@ -119,67 +140,44 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		//Not Really sure what to put here.
 	}
 
-
-	/* Test if grounded here. Just test if the object is touching anything*/
-	
-	/*
-	if (moveState == MOVE_STATE::WALKING)
-	{
-		if (GetWorld()->SweepSingleByChannel(hit, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentQuat(), ECollisionChannel::ECC_WorldStatic, capsuleComponent->GetCollisionShape(TOUCH_TOLERANCE)))
-		{
-			//Block did occur, now we must determine if it is ground.
-			if (hit.ImpactPoint.Z > (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("Set falling : %s"), *hit.Actor->GetName());
-				DrawDebugPoint(GetWorld(), hit.ImpactPoint - FVector(0,0,10),50,FColor::Cyan,false, 3);
-				//moveState = MOVE_STATE::FALLING;
-			}
-		}
-	}
-	*/
-	/*
-	if (moveState == MOVE_STATE::WALKING)
-	{
-		TArray<FOverlapResult> outOverlaps;
-		if (GetWorld()->OverlapMultiByObjectType(outOverlaps, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentQuat(), ECollisionChannel::ECC_WorldStatic, capsuleComponent->GetCollisionShape(TOUCH_TOLERANCE)))
-		{
-			//Block did occur, now we must determine if it is ground.
-			if (hit.ImpactPoint.Z > (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
-			{
-				moveState = MOVE_STATE::FALLING;
-			}
-		}
-	}
-	*/
-
+	//Check if Falling.
 	if (moveState == MOVE_STATE::WALKING)
 	{
 		TArray<FHitResult> outHits;
 		FComponentQueryParams outParams(FName(TEXT("DUDE")), GetOwner());
-		//if (GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() - FVector(0,0,TOUCH_TOLERANCE), capsuleComponent->GetComponentQuat(), outParams))
+		
 		GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() - FVector(0, 0, MAX_FLOOR_DIST), capsuleComponent->GetComponentQuat(), outParams);
 	
 		if(outHits.Num() > 0)
 		{
-			
 			//Block did occur, now we must determine if it is ground.
-			if (outHits[0].ImpactPoint.Z > (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
+			bool bGroundFound = false;
+			for (int index = 0; index < outHits.Num(); index++)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Not Ground: Falling"));
-				DrawDebugPoint(GetWorld(), hit.ImpactPoint - FVector(0, 0, 10), 50, FColor::Cyan, false, 3);
+				
+				//Check if it is ground.
+				//if (outHits[index].ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
+				if (CutOff(outHits[index].ImpactPoint.Z, 4) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4))
+				{
+					// It is ground
+					bGroundFound = true;
+					break;
+				}
+				
+			}
+
+			if (!bGroundFound)
+			{
 				moveState = MOVE_STATE::FALLING;
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Touching Ground"));
-				velocity = FVector(0, 0, 0);
-
+				velocity = FVector::ZeroVector;
 			}
 		}
 		//nothing touhing us so we falls
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Touching nothing: Falling"));
 			moveState = MOVE_STATE::FALLING;
 		}
 	}
@@ -221,7 +219,7 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		
 		//UE_LOG(LogTemp, Warning, TEXT("Hit angle dep:%f, cos %f , %f"), outHits[i].PenetrationDepth,FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()), atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) * (180 / PI));
-	
+
 		if (FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()) >= 0 )
 		{
 			//do nothing?
@@ -257,4 +255,14 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 void UTacMoveComp::Initalize(UCapsuleComponent * CapCom)
 {
 	capsuleComponent = CapCom;
+}
+
+
+double UTacMoveComp::CutOff(double value, int place)
+{
+	int test = value * pow(10, place) * 10;
+	double test2 = test / (10);
+	test2 = test2 / pow(10, place);
+	
+	return test2;
 }
