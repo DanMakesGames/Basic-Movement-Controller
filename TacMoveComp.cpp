@@ -22,9 +22,9 @@ UTacMoveComp::UTacMoveComp()
 
 	FLOOR_DETECTION_PERCISION = 4;
 	//moveState = MOVE_STATE::WALKING;
-	
 
-	// ...
+	PENETRATE_ADITIONAL_SPACING = 0.125f; 
+	
 }
 
 
@@ -226,9 +226,10 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		if (outHits[0].bStartPenetrating)
 		{
-		    //GetWorl
-			capsuleComponent->SetWorldLocation(outHits[0].ImpactPoint + (outHits[0].Normal * outHits[0].PenetrationDepth) + (outHits[0].Normal * 0.5));
-			//capsuleComponent->SetWorldLocation(outHits[0].ImpactPoint + (outHits[0].Normal * outHits[0].PenetrationDepth));
+		    
+			//capsuleComponent->SetWorldLocation(outHits[0].ImpactPoint + (outHits[0].Normal * outHits[0].PenetrationDepth) + (outHits[0].Normal * 0.5));
+			capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + GetPenetrationAdjustment(outHits[0]));
+			
 
 		}
 	}
@@ -275,6 +276,29 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 
 	return bComplete;
 }
+
+bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const FHitResult & hit, const FQuat & newRotation)
+{
+	return true;
+}
+
+
+
+FVector UTacMoveComp::GetPenetrationAdjustment(const FHitResult & hit)
+{
+	if (!hit.bStartPenetrating)
+		return FVector::FVector(0,0,0);
+
+	const float penetrationDepth = hit.PenetrationDepth > 0.f ? hit.PenetrationDepth : PENETRATE_ADITIONAL_SPACING;
+
+	return hit.Normal * (penetrationDepth + PENETRATE_ADITIONAL_SPACING);
+}
+
+
+
+
+
+
 
 
 void UTacMoveComp::Initalize(UCapsuleComponent * CapCom)

@@ -54,7 +54,6 @@ private:
 
 	int FLOOR_DETECTION_PERCISION;
 
-
 	//MovementComponent::MoveUpdatedComponent(const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult* OutHit, ETeleportType Teleport)
 	
 	/* Move until blocking hit is made. No ground or character logic really exists here. 
@@ -63,6 +62,11 @@ private:
 
 	/* This is the head of the movement update chain.*/
 	bool performMovement(float DeltaTime);
+
+	bool ResolvePenetration(const FVector& proposedAdjustment, const FHitResult & hit, const FQuat & newRotation);
+	FVector GetPenetrationAdjustment(const FHitResult & hit);
+
+	float PENETRATE_ADITIONAL_SPACING;
 	
 		
 	
