@@ -8,6 +8,7 @@
 
 
 #define TOUCH_TOLERANCE 0.001f // Distance we set from an object after a blocking collision
+//#define TOUCH_TOLERANCE 1// Distance we set from an object after a blocking collision
 #define MAX_FLOOR_DIST 1 // greatest distance we can be from the floor before we consider it falling
 // Sets default values for this component's properties
 
@@ -107,6 +108,8 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		//UE_LOG(LogTemp, Warning, TEXT("Is Floor time: My Method %f, %f"), (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z, (capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z);
 		//if (hit.ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
 		//if (hit.ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z)
+		
+		
 		if (CutOff(hit.ImpactPoint.Z, 4) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4))
 		{
 
@@ -124,11 +127,29 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 			// SLIDE ALONG WALL
 			if (moveState == MOVE_STATE::WALKING)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Sliding time: %f"), hit.Time);
-				
+				TArray<FHitResult> outHits;
+				FComponentQueryParams outParams(FName(TEXT("DUDE")), GetOwner());
+				float time = hit.Time;
+				GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation()  + newVector * DeltaTime, capsuleComponent->GetComponentQuat(), outParams);
 				FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, FVector(0, 0, 1)).GetSafeNormal();
-				DrawDebugDirectionalArrow(GetWorld(),capsuleComponent->GetComponentLocation() - FVector(0, 0, 10), capsuleComponent->GetComponentLocation() + travelDirection * 100 - FVector(0,0,10),50,FColor::Cyan,false, 10);
+				
+				
+				//DrawDebugDirectionalArrow(GetWorld(),capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + travelDirection * 100,50,FColor::Cyan,false, 10);
+				//UE_LOG(LogTemp, Warning, TEXT("-------------------"));
+				//if(hit.bStartPenetrating)
+					//UE_LOG(LogTemp, Warning, TEXT("Sliding time: %b, %b"), hit.bBlockingHit, outHits[0].bBlockingHit);
+					
+				//UE_LOG(LogTemp, Warning, TEXT("hit blocking: %s"), *travelDirection.ToString());
+				
+					//if (outHits[0].bStartPenetrating)
+					//UE_LOG(LogTemp, Warning, TEXT("outHits blocking"));
+					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 50, FColor::Magenta, false,5);
+					DrawDebugDirectionalArrow(GetWorld(), capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + travelDirection * 100, 50, FColor::Cyan, false, 5);
+					//UE_LOG(LogTemp, Warning, TEXT("hi"));
+				
 				newVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(),travelDirection)) * travelDirection;
+				
+				
 				Move(newVector, (rotationVelocity * DeltaTime * maxRotationSpeed * (1 - hit.Time)).Quaternion(), hit);
 			}
 
@@ -205,31 +226,33 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		if (outHits[0].bStartPenetrating)
 		{
-		
-			capsuleComponent->SetWorldLocation(outHits[0].ImpactPoint + outHits[0].ImpactNormal * outHits[0].PenetrationDepth);
+		    //GetWorl
+			capsuleComponent->SetWorldLocation(outHits[0].ImpactPoint + (outHits[0].Normal * outHits[0].PenetrationDepth) + (outHits[0].Normal * 0.5));
+			//capsuleComponent->SetWorldLocation(outHits[0].ImpactPoint + (outHits[0].Normal * outHits[0].PenetrationDepth));
+
 		}
 	}
 	
 	GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, capsuleComponent->GetComponentQuat() * NewRotation, outParams);
-
-
+	
 	/* Loop through, looking for a valid blocking hit. These hits must have normals facing
 	 * the same direction as the velocity, then set the value of the outHit*/
 	for (int i = 0; i < outHits.Num(); i++)
 	{
 		
 		//UE_LOG(LogTemp, Warning, TEXT("Hit angle dep:%f, cos %f , %f"), outHits[i].PenetrationDepth,FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()), atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) * (180 / PI));
+		if(outHits[i].bStartPenetrating)
+
+			UE_LOG(LogTemp, Warning, TEXT("Still Penetrating Time %f"), outHits[i].Time);
+
 
 		if (FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()) >= 0 )
 		{
 			//do nothing?
-			//UE_LOG(LogTemp, Warning, TEXT("LESS THAN"));
 		}
 		//Blocking hit
 		else
 		{
-	
-			//DrawDebugPoint(GetWorld(), outHits[i].ImpactPoint ,50,FColor::Cyan,false, -1);
 			
 			//UE_LOG(LogTemp, Warning, TEXT("Hit Detected: %s , Time %f"), *(outHits[i].Actor->GetName()),outHits[i].Time );
 			//UE_LOG(LogTemp, Warning, TEXT("Hit angle cos: %f , %f"), acos(FVector::DotProduct(outHits[i].Normal, Delta.GetSafeNormal())) * (180 / PI) , atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) * (180 / PI));
@@ -241,12 +264,14 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 		
 	}
 
-	//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) - (Delta.GetSafeNormal() * 0.0001f));
-	capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) + OutHit.ImpactNormal * TOUCH_TOLERANCE);
-	//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) );
+	if(bComplete)
+		capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time));
+	else
+		capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) + (OutHit.Normal * TOUCH_TOLERANCE));
+		//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time));
+		//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) - (Delta.GetSafeNormal() * TOUCH_TOLERANCE));
 
 	capsuleComponent->SetWorldRotation(capsuleComponent->GetComponentQuat() * NewRotation);
-
 
 	return bComplete;
 }

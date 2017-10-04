@@ -24,6 +24,7 @@ ATestPawn::ATestPawn()
 	
 	cameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	cameraComponent->SetupAttachment(RootComponent);
+	cameraComponent->SetRelativeLocation(FVector(0,0,10));
 	cameraRotation = FRotator(0,0,0);
 }
 
