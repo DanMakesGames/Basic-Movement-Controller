@@ -18,7 +18,10 @@ ATestPawn::ATestPawn()
 	movementShape->InitCapsuleSize(10,50);
 	moveComponent->Initalize(movementShape);
 	movementShape->bMultiBodyOverlap = true;
-	movementShape->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	movementShape->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	movementShape->SetCollisionObjectType(ECollisionChannel::ECC_Pawn);
+	movementShape->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
+	
 
 
 	

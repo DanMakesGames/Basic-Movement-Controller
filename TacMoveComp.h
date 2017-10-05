@@ -67,6 +67,7 @@ private:
 	FVector GetPenetrationAdjustment(const FHitResult & hit);
 
 	float PENETRATE_ADITIONAL_SPACING;
+	float RESOLVE_STRICTNESS;
 	
 		
 	

@@ -7,7 +7,7 @@
 #include <math.h>   
 
 
-#define TOUCH_TOLERANCE 0.001f // Distance we set from an object after a blocking collision
+#define TOUCH_TOLERANCE 0.0001f // Distance we set from an object after a blocking collision
 //#define TOUCH_TOLERANCE 1// Distance we set from an object after a blocking collision
 #define MAX_FLOOR_DIST 1 // greatest distance we can be from the floor before we consider it falling
 // Sets default values for this component's properties
@@ -23,7 +23,8 @@ UTacMoveComp::UTacMoveComp()
 	FLOOR_DETECTION_PERCISION = 4;
 	//moveState = MOVE_STATE::WALKING;
 
-	PENETRATE_ADITIONAL_SPACING = 0.125f; 
+	PENETRATE_ADITIONAL_SPACING = 0.125f;
+	RESOLVE_STRICTNESS = 0.1f;
 	
 }
 
@@ -110,7 +111,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		//if (hit.ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z)
 		
 		
-		if (CutOff(hit.ImpactPoint.Z, 4) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4))
+		if (CutOff(hit.ImpactPoint.Z, FLOOR_DETECTION_PERCISION) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, FLOOR_DETECTION_PERCISION))
 		{
 
 			UE_LOG(LogTemp, Warning, TEXT("Is Floor hitpoint: %f, %f"), CutOff(hit.ImpactPoint.Z, 4), CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4));
@@ -178,7 +179,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				
 				//Check if it is ground.
 				//if (outHits[index].ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
-				if (CutOff(outHits[index].ImpactPoint.Z, 4) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4))
+				if (CutOff(outHits[index].ImpactPoint.Z, FLOOR_DETECTION_PERCISION) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, FLOOR_DETECTION_PERCISION))
 				{
 					// It is ground
 					bGroundFound = true;
@@ -189,6 +190,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 
 			if (!bGroundFound)
 			{
+				UE_LOG(LogTemp, Warning, TEXT("Setting falling 1"));
 				moveState = MOVE_STATE::FALLING;
 			}
 			else
@@ -199,6 +201,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		//nothing touhing us so we falls
 		else
 		{
+			UE_LOG(LogTemp, Warning, TEXT("Setting falling 2"));
 			moveState = MOVE_STATE::FALLING;
 		}
 	}
@@ -220,7 +223,7 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	float time = 1.0f;
 	TArray<FHitResult> outHits;
 	FComponentQueryParams outParams(FName(TEXT("DUDE")), GetOwner());
-
+	//UE_LOG(LogTemp, Warning, TEXT("-----"));
 	GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, capsuleComponent->GetComponentQuat() * NewRotation, outParams);
 	if (outHits.Num() > 0)
 	{
@@ -228,13 +231,14 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 		{
 		    
 			//capsuleComponent->SetWorldLocation(outHits[0].ImpactPoint + (outHits[0].Normal * outHits[0].PenetrationDepth) + (outHits[0].Normal * 0.5));
-			capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + GetPenetrationAdjustment(outHits[0]));
-			
+			//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + GetPenetrationAdjustment(outHits[0]));
+			ResolvePenetration(GetPenetrationAdjustment(outHits[0]), outHits[0], capsuleComponent->GetComponentQuat());
+			GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, capsuleComponent->GetComponentQuat() * NewRotation, outParams);
 
 		}
 	}
 	
-	GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, capsuleComponent->GetComponentQuat() * NewRotation, outParams);
+	
 	
 	/* Loop through, looking for a valid blocking hit. These hits must have normals facing
 	 * the same direction as the velocity, then set the value of the outHit*/
@@ -279,6 +283,20 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 
 bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const FHitResult & hit, const FQuat & newRotation)
 {
+	//First we test the proposed location with overlap.
+	FCollisionQueryParams QueryParams(FName(TEXT("dog")), false, capsuleComponent->GetOwner());
+	FCollisionResponseParams ResponseParam;
+	//InitCollisionParams(QueryParams, ResponseParam); ?
+	bool bOverlapping = GetWorld()->OverlapBlockingTestByChannel(hit.TraceStart + proposedAdjustment,newRotation,capsuleComponent->GetCollisionObjectType(),capsuleComponent->GetCollisionShape(RESOLVE_STRICTNESS), QueryParams, ResponseParam);
+	if (!bOverlapping)
+	{
+		//no overlaps means we can resolve.
+		capsuleComponent->SetWorldLocation(hit.TraceStart + proposedAdjustment);
+
+	}
+	else
+		UE_LOG(LogTemp, Warning, TEXT("RESOLVE FAIL"));
+
 	return true;
 }
 
