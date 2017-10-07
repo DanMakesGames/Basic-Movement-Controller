@@ -81,7 +81,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 {
 	FHitResult hit;
 	FVector newVector;
-	UE_LOG(LogTemp, Warning, TEXT("-=-=-=-=-=-=-=-=-=-"));
+	//UE_LOG(LogTemp, Warning, TEXT("-=-=-=-=-=-=-=-=-=-"));
 	FQuat newRotation = capsuleComponent->GetComponentQuat() * (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion();
 	//Standard motion
 	if (moveState == WALKING)
@@ -122,14 +122,20 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 	if (!bMoveCompleted )
 	{
 		
-		//Evaluate if the ground is good enough to walk on:
-		//yes this is ground
+		//if we hit something while falling remove that normal from the velocity
+		if (moveState == FALLING)
+		{
+			
+			velocity -= FVector::DotProduct(hit.Normal, velocity.GetSafeNormal()) * velocity.Size() * hit.Normal;
+
+		}
+		
 
 		//UE_LOG(LogTemp, Warning, TEXT("Is Floor time: My Method %f, %f"), (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z, (capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z);
 		//if (hit.ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
 		//if (hit.ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z)
 		
-		
+		//Evaluate if the ground is good enough to walk on
 		if (CutOff(hit.ImpactPoint.Z, FLOOR_DETECTION_PERCISION) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, FLOOR_DETECTION_PERCISION))
 		{
 
@@ -137,7 +143,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 			//DrawDebugPoint(GetWorld(),hit.ImpactPoint,50,FColor::Cyan,false,10);
 			if (moveState == MOVE_STATE::FALLING)
 			{
-				
+				UE_LOG(LogTemp, Warning, TEXT("Set Walking"));
 				moveState = MOVE_STATE::WALKING;
 			}
 		}
@@ -194,7 +200,11 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		//Not Really sure what to put here.
 	}
 
-	//Check if Falling.
+	//End Move.
+
+
+
+	//Check if Fallingp------------------------------------------
 	if (moveState == MOVE_STATE::WALKING)
 	{
 		TArray<FHitResult> outHits;
@@ -325,7 +335,7 @@ bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const F
 	if (!bOverlapping)
 	{
 		//no overlaps means we can resolve.
-		UE_LOG(LogTemp, Warning, TEXT("Solved"));
+		
 		capsuleComponent->SetWorldLocation(hit.TraceStart + proposedAdjustment);
 
 	}
