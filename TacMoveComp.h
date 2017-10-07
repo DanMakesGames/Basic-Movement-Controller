@@ -27,10 +27,10 @@ public:
 
 	float maxMoveSpeed;
 	float maxRotationSpeed;
-	
-	
-
 	float gravity;
+
+	bool bIgnoreInitPenetration;
+
 
 	MOVE_STATE moveState;
 

@@ -7,7 +7,7 @@
 #include <math.h>   
 
 
-#define TOUCH_TOLERANCE 0.0001f // Distance we set from an object after a blocking collision
+#define TOUCH_TOLERANCE 0.001 // Distance we set from an object after a blocking collision 0.001f.
 //#define TOUCH_TOLERANCE 1// Distance we set from an object after a blocking collision
 #define MAX_FLOOR_DIST 1 // greatest distance we can be from the floor before we consider it falling
 // Sets default values for this component's properties
@@ -23,8 +23,11 @@ UTacMoveComp::UTacMoveComp()
 	FLOOR_DETECTION_PERCISION = 4;
 	//moveState = MOVE_STATE::WALKING;
 
-	PENETRATE_ADITIONAL_SPACING = 0.125f;
-	RESOLVE_STRICTNESS = 0.1f;
+	PENETRATE_ADITIONAL_SPACING = 0.125;
+	//PENETRATE_ADITIONAL_SPACING = 0.2f;
+	RESOLVE_STRICTNESS = 0.1;
+	
+	bIgnoreInitPenetration = false;
 	
 }
 
@@ -78,7 +81,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 {
 	FHitResult hit;
 	FVector newVector;
-
+	UE_LOG(LogTemp, Warning, TEXT("-=-=-=-=-=-=-=-=-=-"));
 	FQuat newRotation = capsuleComponent->GetComponentQuat() * (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion();
 	//Standard motion
 	if (moveState == WALKING)
@@ -96,11 +99,27 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 
 	}
 
+	//Attempt Movement.
+	bool bMoveCompleted = Move(newVector * DeltaTime, (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion(), hit);
+
+	//Resolve Penetration if it has occured.
+	if (!bMoveCompleted && hit.bStartPenetrating)
+	{
+		
+		FVector adjustment = GetPenetrationAdjustment(hit);
+		
+		ResolvePenetration(adjustment, hit, newRotation);
+		//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.Normal * 100, 50, FColor::Magenta, false, 5);
+		bMoveCompleted = Move(newVector * DeltaTime, (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion(), hit);
+
+	}
+
+
 	
 
 	//--Move---------------------
 	//Hit did occur
-	if ( !Move(newVector * DeltaTime, (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion(), hit ) )
+	if (!bMoveCompleted )
 	{
 		
 		//Evaluate if the ground is good enough to walk on:
@@ -115,7 +134,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		{
 
 			UE_LOG(LogTemp, Warning, TEXT("Is Floor hitpoint: %f, %f"), CutOff(hit.ImpactPoint.Z, 4), CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4));
-			DrawDebugPoint(GetWorld(),hit.ImpactPoint,50,FColor::Cyan,false,10);
+			//DrawDebugPoint(GetWorld(),hit.ImpactPoint,50,FColor::Cyan,false,10);
 			if (moveState == MOVE_STATE::FALLING)
 			{
 				
@@ -144,14 +163,27 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				
 					//if (outHits[0].bStartPenetrating)
 					//UE_LOG(LogTemp, Warning, TEXT("outHits blocking"));
-					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 50, FColor::Magenta, false,5);
-					DrawDebugDirectionalArrow(GetWorld(), capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + travelDirection * 100, 50, FColor::Cyan, false, 5);
+					//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.Normal * 100, 50, FColor::Magenta, false,5);
+					//DrawDebugDirectionalArrow(GetWorld(), capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + travelDirection * 100, 50, FColor::Cyan, false, 5);
 					//UE_LOG(LogTemp, Warning, TEXT("hi"));
 				
 				newVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(),travelDirection)) * travelDirection;
 				
 				
-				Move(newVector, (rotationVelocity * DeltaTime * maxRotationSpeed * (1 - hit.Time)).Quaternion(), hit);
+				bMoveCompleted = Move(newVector, (rotationVelocity * DeltaTime * maxRotationSpeed * (1 - hit.Time)).Quaternion(), hit);
+
+
+				if (!bMoveCompleted && hit.bStartPenetrating)
+				{
+
+					FVector adjustment = GetPenetrationAdjustment(hit);
+
+					ResolvePenetration(adjustment, hit, newRotation);
+					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.Normal * 100, 50, FColor::Magenta, false, 5);
+					bMoveCompleted = Move(newVector * DeltaTime, (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion(), hit);
+
+				}
+
 			}
 
 		}
@@ -229,11 +261,11 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		if (outHits[0].bStartPenetrating)
 		{
-		    
-			//capsuleComponent->SetWorldLocation(outHits[0].ImpactPoint + (outHits[0].Normal * outHits[0].PenetrationDepth) + (outHits[0].Normal * 0.5));
-			//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + GetPenetrationAdjustment(outHits[0]));
-			ResolvePenetration(GetPenetrationAdjustment(outHits[0]), outHits[0], capsuleComponent->GetComponentQuat());
-			GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, capsuleComponent->GetComponentQuat() * NewRotation, outParams);
+			UE_LOG(LogTemp, Warning, TEXT("Start pentraiting %f"), outHits[0].PenetrationDepth);
+			OutHit = outHits[0];
+			return false;
+			//ResolvePenetration(GetPenetrationAdjustment(outHits[0]), outHits[0], capsuleComponent->GetComponentQuat());
+			//GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, capsuleComponent->GetComponentQuat() * NewRotation, outParams);
 
 		}
 	}
@@ -246,10 +278,11 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		
 		//UE_LOG(LogTemp, Warning, TEXT("Hit angle dep:%f, cos %f , %f"), outHits[i].PenetrationDepth,FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()), atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) * (180 / PI));
-		if(outHits[i].bStartPenetrating)
-
+		if (outHits[i].bStartPenetrating)
+		{
+			//Never gets here because the function leaves early if it is still penetrating.
 			UE_LOG(LogTemp, Warning, TEXT("Still Penetrating Time %f"), outHits[i].Time);
-
+		}
 
 		if (FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()) >= 0 )
 		{
@@ -287,15 +320,31 @@ bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const F
 	FCollisionQueryParams QueryParams(FName(TEXT("dog")), false, capsuleComponent->GetOwner());
 	FCollisionResponseParams ResponseParam;
 	//InitCollisionParams(QueryParams, ResponseParam); ?
-	bool bOverlapping = GetWorld()->OverlapBlockingTestByChannel(hit.TraceStart + proposedAdjustment,newRotation,capsuleComponent->GetCollisionObjectType(),capsuleComponent->GetCollisionShape(RESOLVE_STRICTNESS), QueryParams, ResponseParam);
+	//UE_LOG(LogTemp, Warning, TEXT("Adjustment: %s"), *proposedAdjustment.ToString());
+	bool bOverlapping = GetWorld()->OverlapBlockingTestByChannel(hit.TraceStart + proposedAdjustment, newRotation, capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(RESOLVE_STRICTNESS), QueryParams, ResponseParam);
 	if (!bOverlapping)
 	{
 		//no overlaps means we can resolve.
+		UE_LOG(LogTemp, Warning, TEXT("Solved"));
 		capsuleComponent->SetWorldLocation(hit.TraceStart + proposedAdjustment);
 
 	}
 	else
-		UE_LOG(LogTemp, Warning, TEXT("RESOLVE FAIL"));
+	{
+		//UE_LOG(LogTemp, Warning, TEXT("RESOLVE FAIL 1"));
+		FHitResult SweepOutHit(1.0f);
+		bIgnoreInitPenetration = true;
+		//Move(proposedAdjustment, capsuleComponent->GetComponentQuat(), SweepOutHit);
+		//capsuleComponent->SetWorldLocation(hit.TraceStart + proposedAdjustment.GetSafeNormal2D() * (0.5 + proposedAdjustment.Size()) );
+		capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + proposedAdjustment);
+	}
+
+	if (GetWorld()->OverlapBlockingTestByChannel(capsuleComponent->GetComponentLocation(), newRotation, capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(), QueryParams, ResponseParam))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Still"));
+	}
+
+	//UE_LOG(LogTemp, Warning, TEXT("RESOLVE FAIL FINAL"));
 
 	return true;
 }
@@ -305,9 +354,10 @@ bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const F
 FVector UTacMoveComp::GetPenetrationAdjustment(const FHitResult & hit)
 {
 	if (!hit.bStartPenetrating)
-		return FVector::FVector(0,0,0);
-
-	const float penetrationDepth = hit.PenetrationDepth > 0.f ? hit.PenetrationDepth : PENETRATE_ADITIONAL_SPACING;
+	{
+		return FVector::FVector(0, 0, 0);
+	}
+	const float penetrationDepth = (hit.PenetrationDepth > 0.f ? hit.PenetrationDepth : PENETRATE_ADITIONAL_SPACING);
 
 	return hit.Normal * (penetrationDepth + PENETRATE_ADITIONAL_SPACING);
 }
