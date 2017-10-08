@@ -29,7 +29,7 @@ public:
 	float maxRotationSpeed;
 	float gravity;
 
-	bool bIgnoreInitPenetration;
+	bool bIgnoreInitPenetration;//if true, then allow for sweeps to occur where the object ignores first contact.
 
 
 	MOVE_STATE moveState;

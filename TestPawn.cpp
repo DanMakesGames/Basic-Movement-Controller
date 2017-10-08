@@ -15,7 +15,7 @@ ATestPawn::ATestPawn()
 
 	movementShape = CreateDefaultSubobject<UCapsuleComponent>(TEXT("Cylander shape for movement"));
 	SetRootComponent(movementShape);
-	movementShape->InitCapsuleSize(10,50);
+	movementShape->InitCapsuleSize(20,50);
 	moveComponent->Initalize(movementShape);
 	movementShape->bMultiBodyOverlap = true;
 	movementShape->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
