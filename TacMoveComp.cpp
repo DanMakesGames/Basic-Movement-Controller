@@ -8,7 +8,6 @@
 
 
 #define TOUCH_TOLERANCE 0.001f // Distance we set from an object after a blocking collision 0.001f.
-//#define TOUCH_TOLERANCE 1// Distance we set from an object after a blocking collision
 #define MAX_FLOOR_DIST 2.4 // greatest distance we can be from the floor before we consider it falling
 const float MIN_FLOOR_DIST = 1;
 
@@ -21,23 +20,15 @@ UTacMoveComp::UTacMoveComp()
 	moveState = MOVE_STATE::FALLING;
 
 	FLOOR_DETECTION_PERCISION = 4;
-	//moveState = MOVE_STATE::WALKING;
-
 	PENETRATE_ADITIONAL_SPACING = 0.125;
-	//PENETRATE_ADITIONAL_SPACING = 0.2f;
 	RESOLVE_STRICTNESS = 0.1;
-	
-	bIgnoreInitPenetration = false;
 	
 }
 
 
 void UTacMoveComp::BeginPlay()
 {
-	Super::BeginPlay();
-
-	// ...
-	
+	Super::BeginPlay();	
 }
 
 
@@ -45,7 +36,6 @@ void UTacMoveComp::TickComponent(float DeltaTime, ELevelTick TickType, FActorCom
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	performMovement(DeltaTime);
-
 
 }
 
@@ -59,7 +49,7 @@ void UTacMoveComp::SetVelocity(const FVector& inVelocity)
 }
 
 
-FVector UTacMoveComp::GetVelocity()
+FVector UTacMoveComp::GetVelocity() const
 {
 	return inputVelocity;
 }
@@ -71,7 +61,7 @@ void UTacMoveComp::SetRotationVelocity(const FRotator& inVelocity)
 }
 
 
-FRotator UTacMoveComp::GetRotationVelocity()
+FRotator UTacMoveComp::GetRotationVelocity() const
 {
 	return rotationVelocity;
 }
@@ -79,17 +69,17 @@ FRotator UTacMoveComp::GetRotationVelocity()
 
 bool UTacMoveComp::performMovement(float DeltaTime)
 {
-	FHitResult hit;
+	
 	FVector newVector;
-	//UE_LOG(LogTemp, Warning, TEXT("-=-=-=-=-=-=-=-=-=-"));
+
+	//Rotation that we want to move to.
 	FQuat newRotation = capsuleComponent->GetComponentQuat() * (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion();
+	
 	//Standard motion
 	if (moveState == WALKING)
 	{
-
 		newVector = velocity + newRotation.RotateVector(inputVelocity.GetSafeNormal()) * maxMoveSpeed;
 		velocity = newVector;
-
 	}
 	//if falling apply downward motion.
 	else if (moveState == FALLING)
@@ -99,119 +89,51 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 
 	}
 
-	//Attempt Movement.
-	bool bMoveCompleted = Move(newVector * DeltaTime, newRotation, hit);
+	//Move the player
+	FHitResult hit;
+	bool bInitalMoveComplete = ResolveAndMove(newVector * DeltaTime, newRotation, hit);
 
-	//Resolve Penetration if it has occured.
-	if (!bMoveCompleted && hit.bStartPenetrating)
+	//If Hit Did Occur durring the move
+	if(!bInitalMoveComplete)
 	{
-		
-		FVector adjustment = GetPenetrationAdjustment(hit);
-		
-		ResolvePenetration(adjustment, hit, newRotation);
-		bMoveCompleted = Move(newVector * DeltaTime, newRotation, hit);
-
-	}
-
-
-	
-
-	//--Move---------------------
-	//Hit did occur
-	if (!bMoveCompleted )
-	{
-		
-		//if we hit something while falling remove that normal from the velocity
-		
-		
-		
-		
-
-		//UE_LOG(LogTemp, Warning, TEXT("Is Floor time: My Method %f, %f"), (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z, (capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z);
-		//if (hit.ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
-		//if (hit.ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z)
-		
-		//Evaluate if the ground is good enough to walk on
+		//Evaluate if the ground is good enough to walk on.
 		double DistanceFromCenter = (hit.ImpactPoint - capsuleComponent->GetComponentLocation()).SizeSquared2D();
 		bool bIsInRange = DistanceFromCenter < capsuleComponent->GetScaledCapsuleRadius();
-
-		//if (CutOff(hit.ImpactPoint.Z, FLOOR_DETECTION_PERCISION) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, FLOOR_DETECTION_PERCISION))
+		
+		//The Hit Object is ground.
 		if(bIsInRange)
 		{
-
-			UE_LOG(LogTemp, Warning, TEXT("Is Floor hitpoint: %f, %f"), CutOff(hit.ImpactPoint.Z, 4), CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4));
-			//DrawDebugPoint(GetWorld(),hit.ImpactPoint,50,FColor::Cyan,false,10);
+			//UE_LOG(LogTemp, Warning, TEXT("Is Floor hitpoint: %f, %f"), CutOff(hit.ImpactPoint.Z, 4), CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4));
 			if (moveState == MOVE_STATE::FALLING)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Set Walking"));
 				moveState = MOVE_STATE::WALKING;
 			}
 		}
-		// Hit Object is not ground. This will need to be modified for slopes
+
+		//Hit Object is not ground. This will need to be modified for slopes
 		else
 		{
-			
+			//if we hit something while falling remove that normal from the velocity
 			if (moveState == FALLING)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Falling: Not Good Enough Ground."));
 				velocity -= FVector::DotProduct(hit.Normal, velocity.GetSafeNormal()) * velocity.Size() * hit.Normal;
-
 			}
 			
-
-			// SLIDE ALONG WALL
+			//Sliding along wall behavior
 			if (moveState == MOVE_STATE::WALKING)
 			{
 				TArray<FHitResult> outHits;
 				FComponentQueryParams outParams(FName(TEXT("DUDE")), GetOwner());
 				float time = hit.Time;
 				GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation()  + newVector * DeltaTime, capsuleComponent->GetComponentQuat(), outParams);
-				FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, FVector(0, 0, 1)).GetSafeNormal();
 				
+				const FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, FVector(0, 0, 1)).GetSafeNormal();
+				const FVector slideVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(),travelDirection)) * travelDirection;
 				
-				//DrawDebugDirectionalArrow(GetWorld(),capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + travelDirection * 100,50,FColor::Cyan,false, 10);
-				//UE_LOG(LogTemp, Warning, TEXT("-------------------"));
-				//if(hit.bStartPenetrating)
-					//UE_LOG(LogTemp, Warning, TEXT("Sliding time: %b, %b"), hit.bBlockingHit, outHits[0].bBlockingHit);
-					
-				//UE_LOG(LogTemp, Warning, TEXT("hit blocking: %s"), *travelDirection.ToString());
-				
-					//if (outHits[0].bStartPenetrating)
-					//UE_LOG(LogTemp, Warning, TEXT("outHits blocking"));
-					//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.Normal * 100, 50, FColor::Magenta, false,5);
-					//DrawDebugDirectionalArrow(GetWorld(), capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + travelDirection * 100, 50, FColor::Cyan, false, 5);
-					//UE_LOG(LogTemp, Warning, TEXT("hi"));
-				
-				newVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(),travelDirection)) * travelDirection;
-				
-				
-				bMoveCompleted = Move(newVector, newRotation, hit);
-
-
-				if (!bMoveCompleted && hit.bStartPenetrating)
-				{
-
-					FVector adjustment = GetPenetrationAdjustment(hit);
-
-					ResolvePenetration(adjustment, hit, newRotation);
-					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.Normal * 100, 50, FColor::Magenta, false, 5);
-					bMoveCompleted = Move(newVector * DeltaTime, newRotation, hit);
-
-				}
-
+				ResolveAndMove(slideVector, newRotation, hit);
 			}
-
 		}
 	}
-	//Hit did not occur
-	else
-	{
-		//Not Really sure what to put here.
-	}
-
-	//End Move.
-
-
 
 	//Check if Fallingp------------------------------------------
 	if (moveState == MOVE_STATE::WALKING)
@@ -229,32 +151,16 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 			for (int index = 0; index < outHits.Num(); index++)
 			{
 				
-				//Check if it is ground.
-				//if (outHits[index].ImpactPoint.Z < (capsuleComponent->GetComponentLocation() - (capsuleComponent->GetScaledCapsuleHalfHeight() - capsuleComponent->GetScaledCapsuleRadius())).Z)
-				
-				//double DistanceFromCenter = (outHits[index].ImpactPoint - capsuleComponent->GetComponentLocation()).SizeSquared2D();
-				//bool bIsInRange = DistanceFromCenter < (capsuleComponent->GetScaledCapsuleRadius());
-				//if(bIsInRange)
+				//Check if it is ground
 				if (CutOff(outHits[index].ImpactPoint.Z, FLOOR_DETECTION_PERCISION) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, FLOOR_DETECTION_PERCISION))
 				{
 					// It is ground
 					
+					//Floor Magnetism: Keep at a constant distance from the ground when moving.
 					if (outHits[index].Distance > MIN_FLOOR_DIST)
 					{
-						UE_LOG(LogTemp, Warning, TEXT("closing Gap"));
-						FHitResult myHit;
-						float aveDist = (MIN_FLOOR_DIST + MAX_FLOOR_DIST) * 0.5;
-						
-						bool bMoveCompleted = Move( FVector(0.f, 0.f, MIN_FLOOR_DIST - outHits[index].Distance), capsuleComponent->GetComponentQuat(), myHit);
-						
-						if (!bMoveCompleted && myHit.bStartPenetrating)
-						{
-
-							FVector adjustment = GetPenetrationAdjustment(myHit);
-							ResolvePenetration(adjustment, myHit, capsuleComponent->GetComponentQuat());
-							bMoveCompleted = Move(FVector(0.f, 0.f, MIN_FLOOR_DIST - outHits[index].Distance), capsuleComponent->GetComponentQuat(), myHit);
-
-						}
+						FHitResult myHit;			
+						ResolveAndMove(FVector(0.f, 0.f, MIN_FLOOR_DIST - outHits[index].Distance), capsuleComponent->GetComponentQuat(), myHit);
 					}
 
 					bGroundFound = true;
@@ -263,13 +169,15 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				
 			}
 
+			//Ground was not found, so begin falling
 			if (!bGroundFound)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Setting falling 1"));
 				moveState = MOVE_STATE::FALLING;
 			}
+			//We are still grounded after move
 			else
 			{
+				//apply ground friction, which slows the player down (in future more complex ground friction could be applied)
 				velocity = FVector::ZeroVector;
 			}
 		}
@@ -355,7 +263,28 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 }
 
 
-bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const FHitResult & hit, const FQuat & newRotation)
+
+bool UTacMoveComp::ResolveAndMove(const FVector& positionDelta, const FQuat& newRotation, FHitResult& outHit)
+{
+	FHitResult hit;
+	//Initial Move attempt
+	bool bMoveCompleted = Move(positionDelta,newRotation,hit);
+
+	//If starting move penetrated, resolve the penetration and try move again
+	if (!bMoveCompleted && hit.bStartPenetrating)
+	{
+		FVector adjustment = GetPenetrationAdjustment(hit);
+		ResolvePenetration(adjustment, hit, capsuleComponent->GetComponentQuat());
+		
+		bMoveCompleted = Move(positionDelta, newRotation, hit);
+	}
+
+	outHit = hit;
+	
+	return bMoveCompleted;
+}
+
+bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const FHitResult& hit, const FQuat& newRotation)
 {
 	//First we test the proposed location with overlap.
 	FCollisionQueryParams QueryParams(FName(TEXT("dog")), false, capsuleComponent->GetOwner());
@@ -404,7 +333,7 @@ bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const F
 }
 
 
-FVector UTacMoveComp::GetPenetrationAdjustment(const FHitResult & hit)
+FVector UTacMoveComp::GetPenetrationAdjustment(const FHitResult& hit)
 {
 	if (!hit.bStartPenetrating)
 	{

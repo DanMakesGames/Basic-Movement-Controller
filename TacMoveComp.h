@@ -17,35 +17,38 @@ class MOVECOMPTEST_API UTacMoveComp : public UActorComponent
 	GENERATED_BODY()
 
 public:	
-	// Sets default values for this component's properties
+	
 	UTacMoveComp();
 
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	
+	static double CutOff(double value, int place);
+
 	void SetVelocity(const FVector& inVelocity);
-	FVector GetVelocity();
+	FVector GetVelocity() const;
+
 	void SetRotationVelocity(const FRotator& inVelocity);
-	FRotator GetRotationVelocity();
+	FRotator GetRotationVelocity() const;
+
+	/**
+	 * Preforms a move, and resolves penetration if the move started penetrating.
+	 * Returns true if move final move occurs with no blocks
+	 */
+	bool ResolveAndMove(const FVector& positionDelta, const FQuat& newRotation, FHitResult& outHit);
+
+	void Initalize(class UCapsuleComponent* CapCom);
 
 	float maxMoveSpeed;
 	float maxRotationSpeed;
-	float gravity;
-
-	bool bIgnoreInitPenetration;//if true, then allow for sweeps to occur where the object ignores first contact.
-
 
 	MOVE_STATE moveState;
 
-
-	void Initalize(class UCapsuleComponent* CapCom);
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
-
-public:	
-	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-	static double CutOff(double value, int place);
-
+	
 private:
+	//bool bIgnoreInitPenetration;//if true, then allow for sweeps to occur where the object ignores first contact.
 	UCapsuleComponent* capsuleComponent;
 	
 	FVector velocity;
@@ -53,8 +56,6 @@ private:
 	FVector inputVelocity;
 
 	int FLOOR_DETECTION_PERCISION;
-
-	//MovementComponent::MoveUpdatedComponent(const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult* OutHit, ETeleportType Teleport)
 	
 	/* Move until blocking hit is made. No ground or character logic really exists here. 
 	 * Returns true if move takes place fully,false if not*/
@@ -68,6 +69,8 @@ private:
 
 	float PENETRATE_ADITIONAL_SPACING;
 	float RESOLVE_STRICTNESS;
+
+	
 	
 		
 	
