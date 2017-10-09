@@ -70,6 +70,15 @@ private:
 	float PENETRATE_ADITIONAL_SPACING;
 	float RESOLVE_STRICTNESS;
 
+	// Distance we set from an object after a blocking collision.
+	float TOUCH_TOLERANCE;
+	
+	//Maximum distance from the ground the player can before they are considered falling.
+	float MAX_FLOOR_DIST;
+
+	//Minimum distance we want to be from the floor. If closer than this we back off.
+	float MIN_FLOOR_DIST;
+
 	
 	
 		

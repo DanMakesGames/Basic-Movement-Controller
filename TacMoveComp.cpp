@@ -7,14 +7,13 @@
 #include <math.h>   
 
 
-#define TOUCH_TOLERANCE 0.001f // Distance we set from an object after a blocking collision 0.001f.
-#define MAX_FLOOR_DIST 2.4 // greatest distance we can be from the floor before we consider it falling
-const float MIN_FLOOR_DIST = 1;
+//#define TOUCH_TOLERANCE 0.001f 
+//#define MAX_FLOOR_DIST 2.4 // greatest distance we can be from the floor before we consider it falling
+//const float MIN_FLOOR_DIST = 1;
 
 
 UTacMoveComp::UTacMoveComp()
 {
-
 	PrimaryComponentTick.bCanEverTick = true;
 	maxMoveSpeed = 150;
 	maxRotationSpeed = 100;
@@ -23,7 +22,9 @@ UTacMoveComp::UTacMoveComp()
 	FLOOR_DETECTION_PERCISION = 4;
 	PENETRATE_ADITIONAL_SPACING = 0.125;
 	RESOLVE_STRICTNESS = 0.1;
-	
+	TOUCH_TOLERANCE = 0.001f;
+	MAX_FLOOR_DIST = 2.4;
+	MIN_FLOOR_DIST = 1;
 }
 
 
@@ -76,9 +77,7 @@ FRotator UTacMoveComp::GetRotationVelocity() const
 
 bool UTacMoveComp::performMovement(float DeltaTime)
 {
-	
 	FVector newVector;
-
 	//Rotation that we want to move to.
 	FQuat newRotation = capsuleComponent->GetComponentQuat() * (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion();
 	
@@ -91,9 +90,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 	//if falling apply downward motion.
 	else if (moveState == FALLING)
 	{
-		
 		newVector = velocity + FVector(0, 0, -1) * maxMoveSpeed;
-
 	}
 
 	//Move the player
