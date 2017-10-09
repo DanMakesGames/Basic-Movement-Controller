@@ -11,6 +11,7 @@
 #define MAX_FLOOR_DIST 2.4 // greatest distance we can be from the floor before we consider it falling
 const float MIN_FLOOR_DIST = 1;
 
+
 UTacMoveComp::UTacMoveComp()
 {
 
@@ -23,6 +24,12 @@ UTacMoveComp::UTacMoveComp()
 	PENETRATE_ADITIONAL_SPACING = 0.125;
 	RESOLVE_STRICTNESS = 0.1;
 	
+}
+
+
+void UTacMoveComp::Initalize(UCapsuleComponent * CapCom)
+{
+	capsuleComponent = CapCom;
 }
 
 
@@ -122,11 +129,6 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 			//Sliding along wall behavior
 			if (moveState == MOVE_STATE::WALKING)
 			{
-				TArray<FHitResult> outHits;
-				FComponentQueryParams outParams(FName(TEXT("DUDE")), GetOwner());
-				float time = hit.Time;
-				GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation()  + newVector * DeltaTime, capsuleComponent->GetComponentQuat(), outParams);
-				
 				const FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, FVector(0, 0, 1)).GetSafeNormal();
 				const FVector slideVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(),travelDirection)) * travelDirection;
 				
@@ -135,18 +137,17 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		}
 	}
 
-	//Check if Fallingp------------------------------------------
+	//Check if falling
 	if (moveState == MOVE_STATE::WALKING)
 	{
-		//Here we are checking for ground.
+		//Here we are checking for ground
 		TArray<FHitResult> outHits;
 		FComponentQueryParams outParams(FName(TEXT("DUDE")), GetOwner());
-		
 		GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() - FVector(0, 0, MAX_FLOOR_DIST), capsuleComponent->GetComponentQuat(), outParams);
 	
 		if(outHits.Num() > 0)
 		{
-			//Block did occur, now we must determine if it is ground.
+			//Block did occur, now we must determine if it is ground
 			bool bGroundFound = false;
 			for (int index = 0; index < outHits.Num(); index++)
 			{
@@ -156,7 +157,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				{
 					// It is ground
 					
-					//Floor Magnetism: Keep at a constant distance from the ground when moving.
+					//Floor Magnetism: Keep at a constant distance from the ground when moving
 					if (outHits[index].Distance > MIN_FLOOR_DIST)
 					{
 						FHitResult myHit;			
@@ -181,14 +182,14 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				velocity = FVector::ZeroVector;
 			}
 		}
-		//nothing touhing us so we falls
+		//nothing touching player so they fall
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Setting falling 2"));
 			moveState = MOVE_STATE::FALLING;
 		}
 	}
 	
+	//Reset the input imformation in preperation for new imformation next tick.
 	inputVelocity = FVector::ZeroVector;
 	rotationVelocity = FRotator(0, 0, 0);
 
@@ -196,72 +197,53 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 }
 
 
-/* TODO: upgrade*/
-bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResult & OutHit)
+bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResult & outHit)
 {
-	OutHit.Reset();
-	/*insert collision scan here*/
-	bool bComplete = true;
-	float time = 1.0f;
-	TArray<FHitResult> outHits;
-	FComponentQueryParams outParams(FName(TEXT("DUDE")), GetOwner());
-	/*
-	if (bIgnoreInitPenetration)
-	{
-		outParams.bFindInitialOverlaps = false;
-	}
-	*/
+	//Reset hit reference
+	outHit.Reset();
 
+	//Peform sweep to see if this move will hit anything
+	TArray<FHitResult> outHits;
+	FComponentQueryParams outParams(FName(TEXT("Move Trace")), GetOwner());
 	GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, NewRotation, outParams);
+	
+	//Do not move if the player started already penetrating
 	if (outHits.Num() > 0)
 	{
 		if (outHits[0].bStartPenetrating)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Start pentraiting %f"), outHits[0].PenetrationDepth);
-			OutHit = outHits[0];
+			outHit = outHits[0];
 			return false;
-
 		}
 	}
-	
-	
-	
+
 	/* Loop through, looking for a valid blocking hit. These hits must have normals facing
 	 * the same direction as the velocity, then set the value of the outHit*/
+	bool bCompleteMove = true;
 	for (int i = 0; i < outHits.Num(); i++)
 	{
-	
-		if (FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()) >= 0 )
+		//Check if we are moving into the hit object. This indicates a true blocking collision.
+		if (FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetSafeNormal()) < 0)
 		{
-			//do nothing?
-		}
-		//Blocking hit
-		else
-		{
-			
-			//UE_LOG(LogTemp, Warning, TEXT("Hit Detected: %s , Time %f"), *(outHits[i].Actor->GetName()),outHits[i].Time );
-			//UE_LOG(LogTemp, Warning, TEXT("Hit angle cos: %f , %f"), acos(FVector::DotProduct(outHits[i].Normal, Delta.GetSafeNormal())) * (180 / PI) , atan2(FVector::CrossProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal()).Size(), FVector::DotProduct(outHits[i].ImpactNormal, Delta.GetUnsafeNormal())) * (180 / PI));
-			OutHit = outHits[i];
-			time = outHits[i].Time;
-			bComplete = false;
+			outHit = outHits[i];
+			bCompleteMove = false;
 			break;
 		}
-		
 	}
 
-	if (bComplete)
-		capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta));
+	if (bCompleteMove)
+	{
+		capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + Delta);
+	}
 	else
-		capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) + (OutHit.Normal * TOUCH_TOLERANCE));
+	{
+		capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * outHit.Time) + (outHit.Normal * TOUCH_TOLERANCE));
+	}
 	
-		//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time));
-		//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * time) - (Delta.GetSafeNormal() * TOUCH_TOLERANCE));
-
 	capsuleComponent->SetWorldRotation(NewRotation);
 
-	return bComplete;
+	return bCompleteMove;
 }
-
 
 
 bool UTacMoveComp::ResolveAndMove(const FVector& positionDelta, const FQuat& newRotation, FHitResult& outHit)
@@ -284,22 +266,23 @@ bool UTacMoveComp::ResolveAndMove(const FVector& positionDelta, const FQuat& new
 	return bMoveCompleted;
 }
 
+
+//TODO: This function needs to be enhanced to full function, in particualr handling resolving penetraing two objects.
 bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const FHitResult& hit, const FQuat& newRotation)
 {
 	//First we test the proposed location with overlap.
-	FCollisionQueryParams QueryParams(FName(TEXT("dog")), false, capsuleComponent->GetOwner());
+	FCollisionQueryParams QueryParams(FName(TEXT("resolve penetration")), false, capsuleComponent->GetOwner());
 	FCollisionResponseParams ResponseParam;
-
 	bool bOverlapping = GetWorld()->OverlapBlockingTestByChannel(hit.TraceStart + proposedAdjustment, newRotation, capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(RESOLVE_STRICTNESS), QueryParams, ResponseParam);
+	
 	if (!bOverlapping)
 	{
 		//no overlaps means we can resolve.
 		capsuleComponent->SetWorldLocation(hit.TraceStart + proposedAdjustment);
-
 	}
 	else
-	{
-		
+	{	
+		//TODO: This needs to be enchanced and all around improved
 		capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + proposedAdjustment);
 		/*
 		FHitResult SweepOutHit(1.0f);
@@ -321,7 +304,6 @@ bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const F
 		
 		bIgnoreInitPenetration = false;
 		*/
-		
 	}
 
 	if (GetWorld()->OverlapBlockingTestByChannel(capsuleComponent->GetComponentLocation(), newRotation, capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(), QueryParams, ResponseParam))
@@ -339,15 +321,9 @@ FVector UTacMoveComp::GetPenetrationAdjustment(const FHitResult& hit)
 	{
 		return FVector::FVector(0, 0, 0);
 	}
+
 	const float penetrationDepth = (hit.PenetrationDepth > 0.f ? hit.PenetrationDepth : PENETRATE_ADITIONAL_SPACING);
-
 	return hit.Normal * (penetrationDepth + PENETRATE_ADITIONAL_SPACING);
-}
-
-
-void UTacMoveComp::Initalize(UCapsuleComponent * CapCom)
-{
-	capsuleComponent = CapCom;
 }
 
 
