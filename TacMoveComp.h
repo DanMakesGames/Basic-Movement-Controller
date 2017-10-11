@@ -55,11 +55,13 @@ private:
 	FRotator rotationVelocity;
 	FVector inputVelocity;
 
+	bool bIgnoreInitPenetration;
+
 	int FLOOR_DETECTION_PERCISION;
 	
 	/* Move until blocking hit is made. No ground or character logic really exists here. 
 	 * Returns true if move takes place fully,false if not*/
-	bool Move(const FVector& Delta, const FQuat& NewRotation, FHitResult & OutHit);
+	bool Move(const FVector& Delta, const FQuat& NewRotation, FHitResult & OutHit, AActor * ignoreActor);
 
 	/* This is the head of the movement update chain.*/
 	bool performMovement(float DeltaTime);
