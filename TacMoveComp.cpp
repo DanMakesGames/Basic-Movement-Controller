@@ -17,7 +17,6 @@ UTacMoveComp::UTacMoveComp()
 	FLOOR_DETECTION_PERCISION = 4;
 	PENETRATE_ADITIONAL_SPACING = 0.125;
 	RESOLVE_STRICTNESS = 0.1;
-	//RESOLVE_STRICTNESS = 0.0;
 	TOUCH_TOLERANCE = 0.001f;
 	
 	MAX_FLOOR_DIST = 2.4;
@@ -210,7 +209,7 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		outParams.AddIgnoredActor(ignoreActor);
 	}
-
+	capsuleComponent->SetWorldRotation(NewRotation);
 	GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, NewRotation, outParams);
 	
 	//Do not move if the player started already penetrating
@@ -243,13 +242,14 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	}
 	else
 	{
-		if(bIgnoreInitPenetration)
+		
+		if (bIgnoreInitPenetration)
 			capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * outHit.Time));
 		else
 			capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * outHit.Time) + (outHit.Normal * TOUCH_TOLERANCE));
 	}
 	
-	capsuleComponent->SetWorldRotation(NewRotation);
+	
 
 	return bCompleteMove;
 }
@@ -279,8 +279,7 @@ bool UTacMoveComp::ResolveAndMove(const FVector& positionDelta, const FQuat& new
 //TODO: This function needs to be enhanced to full function, in particualr handling resolving penetraing two objects.
 bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const FHitResult& hit, const FQuat& newRotation)
 {
-	static int count = 0;
-	UE_LOG(LogTemp, Warning, TEXT("INITIAL: %s"), *hit.Actor->GetName());
+	UE_LOG(LogTemp, Warning, TEXT("-=-=-=-=-=-=-=-=-=-=-=-=-"));
 	//First we test the proposed location with overlap.
 	FCollisionQueryParams QueryParams(FName(TEXT("resolve penetration")),true, GetOwner());
 	FCollisionResponseParams ResponseParam;
@@ -289,36 +288,19 @@ bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const F
 	
 	if (!bOverlapping)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("No Overlap"));
 		//no overlaps means we can resolve.
 		capsuleComponent->SetWorldLocation(hit.TraceStart + proposedAdjustment);
 	}
 	else
 	{	
-		//TODO: This needs to be enchanced and all around improved
-		//capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + proposedAdjustment);
-
-		
-		
-
 		FHitResult SweepOutHit(1.0f);
-		
-		//bIgnoreInitPenetration = true;
 		bool bDidMove = Move(proposedAdjustment, capsuleComponent->GetComponentQuat(), SweepOutHit, hit.GetActor());
-
-		//If we are still penetrating.
-		//UE_LOG(LogTemp, Warning, TEXT("Single Penetartion move: %d"), ++count);
-		//if (SweepOutHit.bStartPenetrating)
-		
+	
+		//Dual Penetration solver
 		if (!bDidMove && SweepOutHit.bStartPenetrating)
 		{
-			//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + proposedAdjustment * 100, 50, FColor::Magenta, false, 5);
-			
 			FVector otherAdjustment = GetPenetrationAdjustment(SweepOutHit);
 			FVector comboAdjustment = otherAdjustment + proposedAdjustment;
-			UE_LOG(LogTemp, Warning, TEXT("Start peneteration on two objects %s %s"), *SweepOutHit.Actor->GetName(), *comboAdjustment.ToString());
-			//DrawDebugDirectionalArrow(GetWorld(), SweepOutHit.ImpactPoint, SweepOutHit.ImpactPoint + otherAdjustment* 100, 50, FColor::Green, false, 5);
-			DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + comboAdjustment * 100, 50, FColor::Yellow, false, 5);
 
 			if (otherAdjustment != proposedAdjustment && !comboAdjustment.IsZero())
 			{
@@ -327,65 +309,29 @@ bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const F
 				bIgnoreInitPenetration = false;
 			}
 		}
-		
-		//if (GetWorld()->OverlapBlockingTestByChannel(capsuleComponent->GetComponentLocation(), newRotation, capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(), QueryParams, ResponseParam))
-		//{
 
-
-		//FCollisionQueryParams QueryParams2(FName(TEXT("resolve penetration")));
-		//if(capsuleComponent->ComponentOverlapComponent(hit.GetComponent(),hit.GetComponent()->GetComponentLocation(), hit.GetComponent()->GetComponentQuat(),QueryParams))
+		//Failed Move Out sovler
 		if (!bDidMove)
 		{
-
-
-				//FVector otherAdjustment = SweepOutHit.ImpactNormal * proposedAdjustment.Size();
-				FVector otherAdjustment = SweepOutHit.ImpactNormal * PENETRATE_ADITIONAL_SPACING;
-				FVector comboAdjustment = otherAdjustment + proposedAdjustment;
-
-
-				UE_LOG(LogTemp, Warning, TEXT("mall bounce correct: %s %s"), *SweepOutHit.Actor->GetName(), *comboAdjustment.ToString());
-				if (otherAdjustment != proposedAdjustment && !comboAdjustment.IsZero())
-				{
-					bIgnoreInitPenetration = true;
-					bDidMove = Move(comboAdjustment, capsuleComponent->GetComponentQuat(), SweepOutHit);
-					bIgnoreInitPenetration = false;
-				}
-		}
-		//}
-		
-		if (!bDidMove)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("final Idea"));
-			FVector otherAdjustment = hit.TraceEnd - hit.TraceStart;
+			FVector otherAdjustment = SweepOutHit.ImpactNormal * PENETRATE_ADITIONAL_SPACING;
 			FVector comboAdjustment = otherAdjustment + proposedAdjustment;
-			if (!(hit.TraceEnd - hit.TraceStart).IsZero())
+
+			if (otherAdjustment != proposedAdjustment && !comboAdjustment.IsZero())
 			{
+				bIgnoreInitPenetration = true;
 				bDidMove = Move(comboAdjustment, capsuleComponent->GetComponentQuat(), SweepOutHit);
+				bIgnoreInitPenetration = false;
 			}
 		}
-
-		if (GetWorld()->OverlapBlockingTestByChannel(capsuleComponent->GetComponentLocation(), newRotation, capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(), QueryParams, ResponseParam))
-		{
-
-			//FVector adjust = GetPenetrationAdjustment(SweepOutHit);
-			//ResolvePenetration(adjust, SweepOutHit,capsuleComponent->GetComponentQuat());
-
-		}
-		
-		
-		
-		
-		bIgnoreInitPenetration = false;
-		
 	}
 
-	if (GetWorld()->OverlapBlockingTestByChannel(capsuleComponent->GetComponentLocation(), newRotation, capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(), QueryParams, ResponseParam))
+	//Check if we are still overlapping
+	if (GetWorld()->OverlapBlockingTestByChannel(capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentQuat(), capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(), QueryParams, ResponseParam))
 	{
-
-		UE_LOG(LogTemp, Warning, TEXT("Still %d"), ++count);
-		
+		//UE_LOG(LogTemp, Warning, TEXT("Still"));
+		return false;
 	}
-
+	
 	return true;
 }
 
