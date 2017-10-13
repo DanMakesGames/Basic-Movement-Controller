@@ -30,6 +30,9 @@ public:
 	void SetRotationVelocity(const FRotator& inVelocity);
 	FRotator GetRotationVelocity() const;
 
+	void SetGroundPlane(const FVector& inNormal);
+	FVector GetGroundPlane() const;
+
 	/**
 	 * Preforms a move, and resolves penetration if the move started penetrating.
 	 * Returns true if move final move occurs with no blocks
@@ -37,7 +40,7 @@ public:
 	bool ResolveAndMove(const FVector& positionDelta, const FQuat& newRotation, FHitResult& outHit);
 
 	void Initalize(class UCapsuleComponent* CapCom);
-
+	
 	float maxMoveSpeed;
 	float maxRotationSpeed;
 
@@ -51,9 +54,13 @@ private:
 	//bool bIgnoreInitPenetration;//if true, then allow for sweeps to occur where the object ignores first contact.
 	UCapsuleComponent* capsuleComponent;
 	
+	// The current velocity of the player. This is what is applied to move.
 	FVector velocity;
 	FRotator rotationVelocity;
 	FVector inputVelocity;
+
+	//The normal that defines the plane of the ground we are currently on.
+	FVector groundPlane;
 
 	bool bIgnoreInitPenetration;
 
@@ -81,6 +88,8 @@ private:
 	//Minimum distance we want to be from the floor. If closer than this we back off.
 	float MIN_FLOOR_DIST;
 
+	//Tolorance for the radius method of detecting ground. The larger the less tolorant the detection (aka the harder it is to be ground)
+	float GROUND_DETECT_RADIUS_TOLERANCE;
 	
 	
 		
