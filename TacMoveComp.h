@@ -41,8 +41,14 @@ public:
 
 	void Initalize(class UCapsuleComponent* CapCom);
 	
+	bool IsSlopeAngleValid(const FVector& groundNormal);
+
 	float maxMoveSpeed;
 	float maxRotationSpeed;
+
+	/* This is the maximum angle in terms of radians from the ground normal to (0, 0, 1)
+	 * can be before the ground is considered too sloped to walk on */
+	float maxWalkableSlope;
 
 	MOVE_STATE moveState;
 
@@ -75,6 +81,8 @@ private:
 
 	bool ResolvePenetration(const FVector& proposedAdjustment, const FHitResult & hit, const FQuat & newRotation);
 	FVector GetPenetrationAdjustment(const FHitResult & hit);
+
+	
 
 	float PENETRATE_ADITIONAL_SPACING;
 	float RESOLVE_STRICTNESS;

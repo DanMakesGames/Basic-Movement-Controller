@@ -12,6 +12,9 @@ UTacMoveComp::UTacMoveComp()
 	PrimaryComponentTick.bCanEverTick = true;
 	maxMoveSpeed = 150;
 	maxRotationSpeed = 100;
+	maxWalkableSlope = PI / 2.0;
+
+
 	moveState = MOVE_STATE::FALLING;
 
 	FLOOR_DETECTION_PERCISION = 4;
@@ -86,6 +89,14 @@ FVector UTacMoveComp::GetGroundPlane() const
 	return groundPlane;
 }
 
+
+bool UTacMoveComp::IsSlopeAngleValid(const FVector& groundNormal)
+{
+	UE_LOG(LogTemp, Warning, TEXT("Walkup %f"), (FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0, 0, 1))) * 180 ) / PI);
+	return FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0,0,1))) <= maxWalkableSlope;
+}
+
+
 bool UTacMoveComp::performMovement(float DeltaTime)
 {
 	FVector newVector;
@@ -95,42 +106,71 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 	//Standard motion
 	if (moveState == WALKING)
 	{
-		newVector = velocity + FVector::VectorPlaneProject(newRotation.RotateVector(inputVelocity.GetSafeNormal()) * maxMoveSpeed, GetGroundPlane());
+		//newVector = velocity + FVector::VectorPlaneProject(newRotation.RotateVector(inputVelocity.GetSafeNormal()) * maxMoveSpeed, GetGroundPlane());
+		//newVector = velocity + FVector::VectorPlaneProject(newRotation.RotateVector(inputVelocity.GetSafeNormal()) * maxMoveSpeed, GetGroundPlane()).GetSafeNormal() * (maxMoveSpeed);
+		newVector = velocity + FVector(newRotation.RotateVector(inputVelocity).GetSafeNormal().X, newRotation.RotateVector(inputVelocity).GetSafeNormal().Y, -(GetGroundPlane() | newRotation.RotateVector(inputVelocity).GetSafeNormal()) / GetGroundPlane().Z).GetSafeNormal() * maxMoveSpeed;
 		velocity = newVector;
 		
 	}
 	//if falling apply downward motion.
 	else if (moveState == FALLING)
 	{
-		newVector = velocity + FVector(0, 0, -1) * maxMoveSpeed;
+		
+		newVector = velocity + FVector(0, 0, -50) ;
+		velocity = newVector;
 	}
 
 	//Move the player
 	FHitResult hit;
 	bool bInitalMoveComplete = ResolveAndMove(newVector * DeltaTime, newRotation, hit);
-
+	
 	//If Hit Did Occur durring the move
 	if(!bInitalMoveComplete)
 	{
+		DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + GetGroundPlane() * 100, 4, FColor::Blue, false, 5);
 		//Evaluate if the ground is good enough to walk on.
-		//DrawDebugDirectionalArrow(GetWorld(),hit.ImpactPoint,hit.ImpactPoint + hit.ImpactNormal * 100, 10, FColor::Green,false,10);
+		DrawDebugDirectionalArrow(GetWorld(),hit.ImpactPoint,hit.ImpactPoint + hit.ImpactNormal * 100, 10, FColor::Green,false,10);
 		double DistanceFromCenter = (hit.ImpactPoint - capsuleComponent->GetComponentLocation()).SizeSquared2D();
 		bool bIsInRange = DistanceFromCenter < FMath::Square(capsuleComponent->GetScaledCapsuleRadius() - GROUND_DETECT_RADIUS_TOLERANCE);
 		//UE_LOG(LogTemp, Warning, TEXT("Ground Test: %f, %f"), CutOff(hit.ImpactPoint.Z, 4), CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4));
 		//UE_LOG(LogTemp, Warning, TEXT("Ground Test: %f, %f"), DistanceFromCenter, FMath::Square(capsuleComponent->GetScaledCapsuleRadius()));
 		//The Hit Object is ground.
 		//if (CutOff(hit.ImpactPoint.Z, FLOOR_DETECTION_PERCISION) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, FLOOR_DETECTION_PERCISION))
-		DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 10, FColor::Green, false, 10);
+		//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 10, FColor::Green, false, 10);
 		if(bIsInRange)
 		{
-			DrawDebugDirectionalArrow(GetWorld(),hit.ImpactPoint,hit.ImpactPoint + hit.ImpactNormal * 100, 10, FColor::Green,false,10);
-			UE_LOG(LogTemp, Warning, TEXT("Is floor. Hitpoint: %f, %f"), DistanceFromCenter, FMath::Square(capsuleComponent->GetScaledCapsuleRadius() - GROUND_DETECT_RADIUS_TOLERANCE));
+			//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 10, FColor::Green,false,5);
+			////UE_LOG(LogTemp, Warning, TEXT("Is floor. Hitpoint: %f, %f"), DistanceFromCenter, FMath::Square(capsuleComponent->GetScaledCapsuleRadius() - GROUND_DETECT_RADIUS_TOLERANCE));
 			//UE_LOG(LogTemp, Warning, TEXT("Is Floor hitpoint: %f, %f"), CutOff(hit.ImpactPoint.Z, 4), CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4));
+			//UE_LOG(LogTemp, Warning, TEXT("-----------------"));
+			//Preform walkup onto slope
 			
-			//Preform walkup onto slope,
 			if (moveState == MOVE_STATE::WALKING)
 			{
-
+				UE_LOG(LogTemp, Warning, TEXT("-----------------"));
+				//Check if ground is not too sloped
+				if (IsSlopeAngleValid(hit.ImpactNormal))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Walkup"));
+					//FVector walkupDelta =  FVector::VectorPlaneProject( newVector * DeltaTime * (1 - hit.Time), hit.ImpactNormal );
+					
+					//FVector walkupDelta = FVector::VectorPlaneProject(FVector(newVector.X, newVector.Y, 0 ), hit.ImpactNormal).GetSafeNormal() * (newVector * DeltaTime * (1 - hit.Time)).Size();
+					//FVector walkupDelta = FVector::VectorPlaneProject(FVector(newVector.X, newVector.Y, 0), hit.ImpactNormal).GetSafeNormal() * (newVector * DeltaTime * (1 - hit.Time)).Size();
+					float dot = hit.ImpactNormal | newVector;
+					FVector rampMove = FVector(newVector.X, newVector.Y, -dot  /  hit.ImpactNormal.Z);
+					FVector walkupDelta = rampMove.GetSafeNormal() * (newVector * DeltaTime * (1 - hit.Time)).Size();
+					//FVector walkupDelta = FVector(newVector.X, newVector.Y, -(hit.ImpactNormal, newVector)) * (newVector * DeltaTime * (1 - hit.Time)).Size()
+					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + walkupDelta * 100, 4, FColor::Orange, false, 10);
+					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + newVector * 100, 10, FColor::Purple, false, 10);
+					
+					FHitResult tempHit;
+					ResolveAndMove(walkupDelta, capsuleComponent->GetComponentQuat(), tempHit);
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("not valid: %s"), *hit.ImpactNormal.ToString());
+					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 20, FColor::Green, true );
+				}
 			}
 			
 			if (moveState == MOVE_STATE::FALLING)
@@ -152,9 +192,11 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 			//Sliding along wall behavior
 			if (moveState == MOVE_STATE::WALKING)
 			{
-				const FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, FVector(0, 0, 1)).GetSafeNormal();
-				const FVector slideVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(),travelDirection)) * travelDirection;
-				
+				UE_LOG(LogTemp, Warning, TEXT("Sliding"));
+				//const FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, FVector(0, 0, 1)).GetSafeNormal();
+				const FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, GetGroundPlane()).GetSafeNormal();
+				FVector slideVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(),travelDirection)) * travelDirection;
+				//slideVector = FVector::VectorPlaneProject(slideVector, GetGroundPlane()).GetSafeNormal() * slideVector.Size();
 				ResolveAndMove(slideVector, newRotation, hit);
 			}
 		}
@@ -178,8 +220,12 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				//Check if it is ground
 				if (CutOff(outHits[index].ImpactPoint.Z, FLOOR_DETECTION_PERCISION) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, FLOOR_DETECTION_PERCISION))
 				{
+					//DrawDebugDirectionalArrow(GetWorld(), outHits[index].ImpactPoint, outHits[index].ImpactPoint + GetGroundPlane() * 100, 10, FColor::Red, false, 10);
 					// It is ground
+
 					SetGroundPlane(outHits[index].ImpactNormal);
+					//UE_LOG(LogTemp, Warning, TEXT("ground normal: %s"), *GetGroundPlane().ToString());
+					
 					//Floor Magnetism: Keep at a constant distance from the ground when moving
 					if (outHits[index].Distance > MIN_FLOOR_DIST)
 					{
@@ -196,6 +242,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 			//Ground was not found, so begin falling
 			if (!bGroundFound)
 			{
+				UE_LOG(LogTemp, Warning, TEXT("Set Fallind"));
 				moveState = MOVE_STATE::FALLING;
 			}
 			//We are still grounded after move
@@ -208,6 +255,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		//nothing touching player so they fall
 		else
 		{
+			UE_LOG(LogTemp, Warning, TEXT("Set Fallind"));
 			moveState = MOVE_STATE::FALLING;
 		}
 	}
