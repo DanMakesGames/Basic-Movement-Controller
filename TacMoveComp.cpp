@@ -12,7 +12,7 @@ UTacMoveComp::UTacMoveComp()
 	PrimaryComponentTick.bCanEverTick = true;
 	maxMoveSpeed = 150;
 	maxRotationSpeed = 100;
-	maxWalkableSlope = PI / 2.0;
+	maxWalkableSlope = PI /4.0;
 
 
 	moveState = MOVE_STATE::FALLING;
@@ -92,7 +92,7 @@ FVector UTacMoveComp::GetGroundPlane() const
 
 bool UTacMoveComp::IsSlopeAngleValid(const FVector& groundNormal)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Walkup %f"), (FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0, 0, 1))) * 180 ) / PI);
+	//UE_LOG(LogTemp, Warning, TEXT("Walkup %f"), (FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0, 0, 1))) * 180 ) / PI);
 	return FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0,0,1))) <= maxWalkableSlope;
 }
 
@@ -106,10 +106,11 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 	//Standard motion
 	if (moveState == WALKING)
 	{
-		//newVector = velocity + FVector::VectorPlaneProject(newRotation.RotateVector(inputVelocity.GetSafeNormal()) * maxMoveSpeed, GetGroundPlane());
+		
 		//newVector = velocity + FVector::VectorPlaneProject(newRotation.RotateVector(inputVelocity.GetSafeNormal()) * maxMoveSpeed, GetGroundPlane()).GetSafeNormal() * (maxMoveSpeed);
 		newVector = velocity + FVector(newRotation.RotateVector(inputVelocity).GetSafeNormal().X, newRotation.RotateVector(inputVelocity).GetSafeNormal().Y, -(GetGroundPlane() | newRotation.RotateVector(inputVelocity).GetSafeNormal()) / GetGroundPlane().Z).GetSafeNormal() * maxMoveSpeed;
 		velocity = newVector;
+		
 		
 	}
 	//if falling apply downward motion.
@@ -151,25 +152,36 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				//Check if ground is not too sloped
 				if (IsSlopeAngleValid(hit.ImpactNormal))
 				{
-					UE_LOG(LogTemp, Warning, TEXT("Walkup"));
+					
 					//FVector walkupDelta =  FVector::VectorPlaneProject( newVector * DeltaTime * (1 - hit.Time), hit.ImpactNormal );
 					
 					//FVector walkupDelta = FVector::VectorPlaneProject(FVector(newVector.X, newVector.Y, 0 ), hit.ImpactNormal).GetSafeNormal() * (newVector * DeltaTime * (1 - hit.Time)).Size();
 					//FVector walkupDelta = FVector::VectorPlaneProject(FVector(newVector.X, newVector.Y, 0), hit.ImpactNormal).GetSafeNormal() * (newVector * DeltaTime * (1 - hit.Time)).Size();
-					float dot = hit.ImpactNormal | newVector;
-					FVector rampMove = FVector(newVector.X, newVector.Y, -dot  /  hit.ImpactNormal.Z);
-					FVector walkupDelta = rampMove.GetSafeNormal() * (newVector * DeltaTime * (1 - hit.Time)).Size();
-					//FVector walkupDelta = FVector(newVector.X, newVector.Y, -(hit.ImpactNormal, newVector)) * (newVector * DeltaTime * (1 - hit.Time)).Size()
-					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + walkupDelta * 100, 4, FColor::Orange, false, 10);
-					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + newVector * 100, 10, FColor::Purple, false, 10);
+					/*
+					FVector flat = FVector(newVector.X, newVector.Y, 0);
+					float dot = hit.ImpactNormal | flat;
+					FVector rampMove = FVector(flat.X, flat.Y, -(dot  /  hit.ImpactNormal.Z));
+					FVector walkupDelta = rampMove.GetSafeNormal() * (newVector * DeltaTime * (1.0f - hit.Time)).Size();
+					*/
+
 					
+					FVector flat = FVector(newVector.X, newVector.Y, 0);
+					float dot = hit.ImpactNormal | flat;
+					FVector rampMove = FVector(flat.X, flat.Y, -(dot  /  hit.ImpactNormal.Z));
+					FVector walkupDelta = rampMove.GetSafeNormal() * (newVector * DeltaTime * (1.0f - hit.Time)).Size();
+					
+					//FVector walkupDelta = FVector(newVector.X, newVector.Y, -(hit.ImpactNormal, newVector)) * (newVector * DeltaTime * (1 - hit.Time)).Size()
+					//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + walkupDelta * 100, 4, FColor::Orange, false, 10);
+				//	DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + newVector * 100, 10, FColor::Purple, false, 10);
+					UE_LOG(LogTemp, Warning, TEXT("Walkup %f, %f"), walkupDelta.Size(), (walkupDelta.GetSafeNormal() | hit.ImpactNormal));
 					FHitResult tempHit;
 					ResolveAndMove(walkupDelta, capsuleComponent->GetComponentQuat(), tempHit);
 				}
+
 				else
 				{
 					UE_LOG(LogTemp, Warning, TEXT("not valid: %s"), *hit.ImpactNormal.ToString());
-					DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 20, FColor::Green, true );
+					//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 20, FColor::Green, true );
 				}
 			}
 			
@@ -242,7 +254,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 			//Ground was not found, so begin falling
 			if (!bGroundFound)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Set Fallind"));
+				UE_LOG(LogTemp, Warning, TEXT("Set Falling 1"));
 				moveState = MOVE_STATE::FALLING;
 			}
 			//We are still grounded after move
@@ -255,7 +267,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		//nothing touching player so they fall
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Set Fallind"));
+			UE_LOG(LogTemp, Warning, TEXT("Set Falling 2"));
 			moveState = MOVE_STATE::FALLING;
 		}
 	}
@@ -294,6 +306,7 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		if (outHits[0].bStartPenetrating)
 		{
+			UE_LOG(LogTemp, Warning, TEXT("Start Penetrating"));
 			outHit = outHits[0];
 			return false;
 		}
