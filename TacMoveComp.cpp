@@ -12,7 +12,8 @@ UTacMoveComp::UTacMoveComp()
 	PrimaryComponentTick.bCanEverTick = true;
 	maxMoveSpeed = 150;
 	maxRotationSpeed = 100;
-	maxWalkableSlope = PI /4.0;
+	maxWalkableSlope = PI /3.0;
+	//maxWalkableSlope = PI / 2.0;
 
 
 	moveState = MOVE_STATE::FALLING;
@@ -92,7 +93,7 @@ FVector UTacMoveComp::GetGroundPlane() const
 
 bool UTacMoveComp::IsSlopeAngleValid(const FVector& groundNormal)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("Walkup %f"), (FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0, 0, 1))) * 180 ) / PI);
+	UE_LOG(LogTemp, Warning, TEXT("Angle: %f"), (FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0, 0, 1))) * 180 ) / PI);
 	return FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0,0,1))) <= maxWalkableSlope;
 }
 
@@ -182,6 +183,15 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				{
 					UE_LOG(LogTemp, Warning, TEXT("not valid: %s"), *hit.ImpactNormal.ToString());
 					//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 20, FColor::Green, true );
+					if (moveState == MOVE_STATE::WALKING)
+					{
+						UE_LOG(LogTemp, Warning, TEXT("Sliding"));
+						//const FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, FVector(0, 0, 1)).GetSafeNormal();
+						const FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, GetGroundPlane()).GetSafeNormal();
+						FVector slideVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(), travelDirection)) * travelDirection;
+						//slideVector = FVector::VectorPlaneProject(slideVector, GetGroundPlane()).GetSafeNormal() * slideVector.Size();
+						ResolveAndMove(slideVector, newRotation, hit);
+					}
 				}
 			}
 			
@@ -234,8 +244,8 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				{
 					//DrawDebugDirectionalArrow(GetWorld(), outHits[index].ImpactPoint, outHits[index].ImpactPoint + GetGroundPlane() * 100, 10, FColor::Red, false, 10);
 					// It is ground
-
-					SetGroundPlane(outHits[index].ImpactNormal);
+					if (IsSlopeAngleValid(outHits[index].ImpactNormal))
+						SetGroundPlane(outHits[index].ImpactNormal);
 					//UE_LOG(LogTemp, Warning, TEXT("ground normal: %s"), *GetGroundPlane().ToString());
 					
 					//Floor Magnetism: Keep at a constant distance from the ground when moving
@@ -298,6 +308,7 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		outParams.AddIgnoredActor(ignoreActor);
 	}
+	//outParams.bTraceComplex = true;
 	capsuleComponent->SetWorldRotation(NewRotation);
 	GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, NewRotation, outParams);
 	
