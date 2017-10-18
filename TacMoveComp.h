@@ -80,6 +80,8 @@ private:
 	bool performMovement(float DeltaTime);
 
 	bool ResolvePenetration(const FVector& proposedAdjustment, const FHitResult & hit, const FQuat & newRotation);
+	bool PerformWalkUp(const FVector& delta, const FHitResult& slopeHit, FHitResult* outHit);
+
 	FVector GetPenetrationAdjustment(const FHitResult & hit);
 
 	
