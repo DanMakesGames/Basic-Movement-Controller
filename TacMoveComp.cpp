@@ -549,7 +549,7 @@ bool UTacMoveComp::SlideAgainstWall(const FVector& delta, const FHitResult& wall
 	//Check if we have a vertical normal
 	FVector wallHeading = FVector(wallHit.ImpactNormal.X, wallHit.ImpactNormal.Y, 0).GetSafeNormal();
 	//UE_LOG(LogTemp, Warning, TEXT("Vertical %s"), *wallHeading.ToString());
-	
+	/*
 		//UE_LOG(LogTemp, Warning, TEXT("Vertical"));
 		FVector traceStart = FVector(capsuleComponent->GetComponentLocation().X, capsuleComponent->GetComponentLocation().Y, wallHit.ImpactPoint.Z);
 		FVector traceEnd = wallHit.ImpactPoint;
@@ -561,12 +561,13 @@ bool UTacMoveComp::SlideAgainstWall(const FVector& delta, const FHitResult& wall
 
 		FCollisionQueryParams lineParams(TEXT("line trace"), false, GetOwner());
 		lineParams.bFindInitialOverlaps = true;
-
+		
 
 		bool bDidHit = GetWorld()->LineTraceSingleByObjectType(lineTraceHit, traceStart, traceEnd + (traceEnd - traceStart).GetSafeNormal() * 1, lineObjectParams, lineParams);
 		if (bDidHit && lineTraceHit.Actor == wallHit.Actor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Vertical %s"), *lineTraceHit.ImpactNormal.ToString());
+			//DrawDebugDirectionalArrow(GetWorld(), lineTraceHit.ImpactPoint, , 4, FColor::Cyan, false, 10);
+			//UE_LOG(LogTemp, Warning, TEXT("Vertical %s"), *FVector(lineTraceHit.ImpactNormal.X, lineTraceHit.ImpactNormal.Y, 0).GetSafeNormal().ToString(), *wallHeading.ToString());
 			//wallHeading = lineTraceHit.ImpactNormal.GetSafeNormal2D();
 			wallHeading = FVector(lineTraceHit.ImpactNormal.X, lineTraceHit.ImpactNormal.Y, 0).GetSafeNormal();
 			if (wallHeading == FVector::ZeroVector)
@@ -576,10 +577,10 @@ bool UTacMoveComp::SlideAgainstWall(const FVector& delta, const FHitResult& wall
 		}
 		else
 			return false;
-
 		
-	
-
+	*/
+	if (wallHeading == FVector::ZeroVector)
+		return false;
 	const FVector travelDirection = FVector::CrossProduct(wallHeading, GetGroundPlane()).GetSafeNormal();
 	const FVector slideVector = (delta * (1 - wallHit.Time)).Size() * (FVector::DotProduct(delta.GetSafeNormal(), travelDirection)) * travelDirection;
 	
