@@ -81,6 +81,8 @@ private:
 
 	bool ResolvePenetration(const FVector& proposedAdjustment, const FHitResult & hit, const FQuat & newRotation);
 	bool PerformWalkUp(const FVector& delta, const FHitResult& slopeHit, FHitResult* outHit);
+	bool SlideAgainstWall(const FVector& delta, const FHitResult& wallHit);
+	
 
 	FVector GetPenetrationAdjustment(const FHitResult & hit);
 
