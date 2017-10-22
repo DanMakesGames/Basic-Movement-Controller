@@ -49,6 +49,8 @@ public:
 	/* This is the maximum angle in terms of radians from the ground normal to (0, 0, 1)
 	 * can be before the ground is considered too sloped to walk on */
 	float maxWalkableSlope;
+	float maxStepUpHeight;
+	float gravity;
 
 	MOVE_STATE moveState;
 
@@ -82,11 +84,9 @@ private:
 	bool ResolvePenetration(const FVector& proposedAdjustment, const FHitResult & hit, const FQuat & newRotation);
 	bool PerformWalkUp(const FVector& delta, const FHitResult& slopeHit, FHitResult* outHit);
 	bool SlideAgainstWall(const FVector& delta, const FHitResult& wallHit);
-	
+	bool PerformStepUp(const FVector& delta, const FHitResult& blockingHit);
 
 	FVector GetPenetrationAdjustment(const FHitResult & hit);
-
-	
 
 	float PENETRATE_ADITIONAL_SPACING;
 	float RESOLVE_STRICTNESS;
@@ -102,6 +102,7 @@ private:
 
 	//Tolorance for the radius method of detecting ground. The larger the less tolorant the detection (aka the harder it is to be ground)
 	float GROUND_DETECT_RADIUS_TOLERANCE;
+
 	
 	
 		
