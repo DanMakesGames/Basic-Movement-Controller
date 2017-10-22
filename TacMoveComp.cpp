@@ -94,35 +94,33 @@ FVector UTacMoveComp::GetGroundPlane() const
 
 bool UTacMoveComp::IsSlopeAngleValid(const FVector& groundNormal)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("Angle: %f, %d"), (FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0, 0, 1))) * 180 ) / PI, FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0, 0, 1))) <= maxWalkableSlope);
 	return FMath::Acos(FVector::DotProduct(groundNormal.GetSafeNormal(), FVector(0,0,1))) <= maxWalkableSlope;
 }
 
 
 bool UTacMoveComp::performMovement(float DeltaTime)
 {
-	FVector newVector;
-	//Rotation that we want to move to.
+	// The initial movement delta applied to the player.
+	FVector moveDelta;
+	// Rotation that we want to move to.
 	FQuat newRotation = capsuleComponent->GetComponentQuat() * (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion();
 	
-	//Standard motion
+	// Standard motion
 	if (moveState == WALKING)
 	{
-		//newVector = velocity + FVector::VectorPlaneProject(newRotation.RotateVector(inputVelocity.GetSafeNormal()) * maxMoveSpeed, GetGroundPlane()).GetSafeNormal() * (maxMoveSpeed);
-		newVector = velocity + FVector(newRotation.RotateVector(inputVelocity).GetSafeNormal().X, newRotation.RotateVector(inputVelocity).GetSafeNormal().Y, -(GetGroundPlane() | newRotation.RotateVector(inputVelocity).GetSafeNormal()) / GetGroundPlane().Z).GetSafeNormal() * maxMoveSpeed;
-		velocity = newVector;
+		velocity += FVector(newRotation.RotateVector(inputVelocity).GetSafeNormal().X, newRotation.RotateVector(inputVelocity).GetSafeNormal().Y, -(GetGroundPlane() | newRotation.RotateVector(inputVelocity).GetSafeNormal()) / GetGroundPlane().Z).GetSafeNormal() * maxMoveSpeed;
 	}
-	//if falling apply downward motion.
+	// If falling apply downward motion.
 	else if (moveState == FALLING)
 	{
-		newVector = velocity + FVector(0, 0, gravity) * DeltaTime;
-		velocity = newVector;
-		UE_LOG(LogTemp, Warning, TEXT("Step Up Attempt %s"), *velocity.ToString());
+		velocity += FVector(0, 0, gravity) * DeltaTime;
 	}
+
+	moveDelta = velocity * DeltaTime;
 
 	//Move the player
 	FHitResult hit;
-	bool bInitalMoveComplete = ResolveAndMove(newVector * DeltaTime, newRotation, hit);
+	bool bInitalMoveComplete = ResolveAndMove(moveDelta, newRotation, hit);
 	
 	
 
@@ -138,7 +136,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 		if (hit.ImpactNormal.Z == 0 && moveState == MOVE_STATE::WALKING)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Step Up Attempt"));
-			bDidStepUp = PerformStepUp(newVector * DeltaTime, hit);
+			bDidStepUp = PerformStepUp(moveDelta, hit);
 		}
 		if (!bDidStepUp)
 		{
@@ -173,10 +171,10 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 						if (IsSlopeAngleValid(hit.ImpactNormal))
 							SetGroundPlane(hit.ImpactNormal);
 
-						FVector flat = FVector(newVector.X, newVector.Y, 0);
+						FVector flat = FVector(moveDelta.X, moveDelta.Y, 0);
 						float dot = hit.ImpactNormal | flat;
 						FVector rampMove = FVector(flat.X, flat.Y, -(dot / hit.ImpactNormal.Z));
-						FVector walkupDelta = rampMove.GetSafeNormal() * (newVector * DeltaTime * (1.0f - hit.Time)).Size();
+						FVector walkupDelta = rampMove.GetSafeNormal() * (moveDelta * (1.0f - hit.Time)).Size();
 
 						//FVector walkupDelta = FVector(newVector.X, newVector.Y, -(hit.ImpactNormal, newVector)) * (newVector * DeltaTime * (1 - hit.Time)).Size()
 						//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + walkupDelta * 100, 4, FColor::Orange, false, 10);
@@ -197,7 +195,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 						if (moveState == MOVE_STATE::WALKING)
 						{
 
-							SlideAgainstWall(newVector * DeltaTime, hit);
+							SlideAgainstWall(moveDelta, hit);
 						}
 					}
 				}
@@ -244,7 +242,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				if (moveState == MOVE_STATE::WALKING)
 				{
 
-					SlideAgainstWall(newVector * DeltaTime, hit);
+					SlideAgainstWall(moveDelta, hit);
 					/*
 					UE_LOG(LogTemp, Warning, TEXT("Not Ground. Sliding"));
 					//FVector WallNormalHeading = FVector(hit.ImpactNormal.X, hit.ImpactNormal.Y, 0).GetSafeNormal;
