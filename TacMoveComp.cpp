@@ -105,12 +105,12 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 	// Rotation that we want to move to.
 	FQuat newRotation = capsuleComponent->GetComponentQuat() * (rotationVelocity * DeltaTime * maxRotationSpeed).Quaternion();
 	
-	// Standard motion
+	// If Walking apply input velocity to velocity.
 	if (moveState == WALKING)
 	{
 		velocity += FVector(newRotation.RotateVector(inputVelocity).GetSafeNormal().X, newRotation.RotateVector(inputVelocity).GetSafeNormal().Y, -(GetGroundPlane() | newRotation.RotateVector(inputVelocity).GetSafeNormal()) / GetGroundPlane().Z).GetSafeNormal() * maxMoveSpeed;
 	}
-	// If falling apply downward motion.
+	// If falling apply gravity.
 	else if (moveState == FALLING)
 	{
 		velocity += FVector(0, 0, gravity) * DeltaTime;
@@ -122,180 +122,86 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 	FHitResult hit;
 	bool bInitalMoveComplete = ResolveAndMove(moveDelta, newRotation, hit);
 	
-	
-
-
 	//If Hit Did Occur durring the move
 	if(!bInitalMoveComplete)
 	{
-		DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + GetGroundPlane() * 100, 4, FColor::Blue, false, 1);
-		DrawDebugDirectionalArrow(GetWorld(),hit.ImpactPoint,hit.ImpactPoint + hit.ImpactNormal * 100,4, FColor::Green,false,1);
-
 		//Fist see if we can preform a step up. 
 		bool bDidStepUp = false;
 		if (hit.ImpactNormal.Z == 0 && moveState == MOVE_STATE::WALKING)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Step Up Attempt"));
 			bDidStepUp = PerformStepUp(moveDelta, hit);
 		}
+
 		if (!bDidStepUp)
 		{
 			double DistanceFromCenter = (hit.ImpactPoint - capsuleComponent->GetComponentLocation()).SizeSquared2D();
 			bool bIsInRange = DistanceFromCenter < FMath::Square(capsuleComponent->GetScaledCapsuleRadius() - GROUND_DETECT_RADIUS_TOLERANCE);
 			if (bIsInRange)
 			{
-				//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + hit.ImpactNormal * 100, 10, FColor::Green,false,5);
-				////UE_LOG(LogTemp, Warning, TEXT("Is floor. Hitpoint: %f, %f"), DistanceFromCenter, FMath::Square(capsuleComponent->GetScaledCapsuleRadius() - GROUND_DETECT_RADIUS_TOLERANCE));
-				//UE_LOG(LogTemp, Warning, TEXT("Is Floor hitpoint: %f, %f"), CutOff(hit.ImpactPoint.Z, 4), CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, 4));
-				//UE_LOG(LogTemp, Warning, TEXT("-----------------"));
-				//Preform walkup onto slope
-
 				if (moveState == MOVE_STATE::WALKING)
 				{
-			
-
-					//Check if ground is not too sloped
+					// Walk Up slope if it is not too sloped.
 					if (IsSlopeAngleValid(hit.ImpactNormal))
 					{
-
-						//FVector walkupDelta =  FVector::VectorPlaneProject( newVector * DeltaTime * (1 - hit.Time), hit.ImpactNormal );
-
-						//FVector walkupDelta = FVector::VectorPlaneProject(FVector(newVector.X, newVector.Y, 0 ), hit.ImpactNormal).GetSafeNormal() * (newVector * DeltaTime * (1 - hit.Time)).Size();
-						//FVector walkupDelta = FVector::VectorPlaneProject(FVector(newVector.X, newVector.Y, 0), hit.ImpactNormal).GetSafeNormal() * (newVector * DeltaTime * (1 - hit.Time)).Size();
-						/*
-						FVector flat = FVector(newVector.X, newVector.Y, 0);
-						float dot = hit.ImpactNormal | flat;
-						FVector rampMove = FVector(flat.X, flat.Y, -(dot  /  hit.ImpactNormal.Z));
-						FVector walkupDelta = rampMove.GetSafeNormal() * (newVector * DeltaTime * (1.0f - hit.Time)).Size();
-						*/
-						if (IsSlopeAngleValid(hit.ImpactNormal))
-							SetGroundPlane(hit.ImpactNormal);
-
+						// Set the ground plane	
+						SetGroundPlane(hit.ImpactNormal);
+						
+						// Calculate the movement up the slope
 						FVector flat = FVector(moveDelta.X, moveDelta.Y, 0);
 						float dot = hit.ImpactNormal | flat;
 						FVector rampMove = FVector(flat.X, flat.Y, -(dot / hit.ImpactNormal.Z));
 						FVector walkupDelta = rampMove.GetSafeNormal() * (moveDelta * (1.0f - hit.Time)).Size();
 
-						//FVector walkupDelta = FVector(newVector.X, newVector.Y, -(hit.ImpactNormal, newVector)) * (newVector * DeltaTime * (1 - hit.Time)).Size()
-						//DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + walkupDelta * 100, 4, FColor::Orange, false, 10);
-					//	DrawDebugDirectionalArrow(GetWorld(), hit.ImpactPoint, hit.ImpactPoint + newVector * 100, 10, FColor::Purple, false, 10);
-						UE_LOG(LogTemp, Warning, TEXT("Walkup %f, %f"), walkupDelta.Size(), (walkupDelta.GetSafeNormal() | hit.ImpactNormal));
+						//Perform the walkup
 						FHitResult tempHit;
 						if (!ResolveAndMove(walkupDelta, capsuleComponent->GetComponentQuat(), tempHit))
 						{
+							//If the walkup hit a wall, slide against it.
 							const FVector travelDirection = FVector::CrossProduct(tempHit.ImpactNormal, hit.ImpactNormal).GetSafeNormal();
 							FVector slideVector = (walkupDelta * (1 - tempHit.Time)).Size() * (FVector::DotProduct(walkupDelta.GetSafeNormal(), travelDirection)) * travelDirection;
-							//slideVector = FVector::VectorPlaneProject(slideVector, GetGroundPlane()).GetSafeNormal() * slideVector.Size();
 							ResolveAndMove(slideVector, newRotation, tempHit);
 						}
 					}
 					else
-					{
-						UE_LOG(LogTemp, Warning, TEXT("not valid: %s"), *hit.ImpactNormal.ToString());
-						if (moveState == MOVE_STATE::WALKING)
-						{
-
-							SlideAgainstWall(moveDelta, hit);
-						}
+					{	
+						// If the ground did not have a valid angle, and could not be walked up, just slide against it.
+						SlideAgainstWall(moveDelta, hit);
 					}
 				}
 
+				// If falling and something hits the bottom of the capsule
 				if (moveState == MOVE_STATE::FALLING)
 				{
+					// Is the thing hit valid ground?
 					if (IsSlopeAngleValid(hit.ImpactNormal))
 					{
+						// Yes it is ground. Set it as the new ground normal and set stated to walking.
 						SetGroundPlane(hit.ImpactNormal);
 						moveState = MOVE_STATE::WALKING;
 					}
-					else {
-						//move down the slope
-						
-						/*
-						FVector heading = hit.ImpactNormal.GetSafeNormal2D();
-						const float slopeAngle = FMath::Acos(FVector::DotProduct(hit.ImpactNormal, heading));
-						const float deltaZ = -FMath::Sin(slopeAngle) *  (1.0f / FMath::Cos(slopeAngle));
-
-						FVector travelNormal = FVector(heading.X, heading.Y,deltaZ).GetSafeNormal();
-						
-						*/
-						//velocity += travelNormal * FMath::Cos(slopeAngle) * gravity * DeltaTime * (1 - hit.Time);
-						//ResolveAndMove(travelNormal , capsuleComponent->GetComponentQuat(), slideDownHit);
+					else 
+					{
+						// No the floor is not valid ground due to slope. Slide down it.
 						FHitResult slideDownHit;
 						velocity -= FVector::DotProduct(hit.ImpactNormal, velocity.GetSafeNormal()) * velocity.Size() * hit.ImpactNormal;
 						ResolveAndMove(velocity * (DeltaTime) * (1 - hit.Time), capsuleComponent->GetComponentQuat(), slideDownHit);
-						
 					}
 				}
 			}
 
-			//Hit Object is not ground. This will need to be modified for slopes
+			// Hit object is not touching bottom of the capsule
 			else
 			{
 				//if we hit something while falling remove that normal from the velocity
 				if (moveState == FALLING)
 				{
-					UE_LOG(LogTemp, Warning, TEXT("Ding"));
 					velocity -= FVector::DotProduct(hit.ImpactNormal, velocity.GetSafeNormal()) * velocity.Size() * hit.ImpactNormal;
 				}
 
 				//Sliding along wall behavior
 				if (moveState == MOVE_STATE::WALKING)
 				{
-
 					SlideAgainstWall(moveDelta, hit);
-					/*
-					UE_LOG(LogTemp, Warning, TEXT("Not Ground. Sliding"));
-					//FVector WallNormalHeading = FVector(hit.ImpactNormal.X, hit.ImpactNormal.Y, 0).GetSafeNormal;
-					//const FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, FVector(0, 0, 1)).GetSafeNormal();
-					const FVector travelDirection = FVector::CrossProduct(hit.ImpactNormal, GetGroundPlane()).GetSafeNormal();
-					FVector slideVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(),travelDirection)) * travelDirection;
-
-					//slideVector = FVector::VectorPlaneProject(slideVector, GetGroundPlane()).GetSafeNormal() * slideVector.Size();
-					DrawDebugDirectionalArrow(GetWorld(), capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + slideVector * 100, 4, FColor::Orange, false, 10);
-					FHitResult slideHit;
-
-					if (!ResolveAndMove(slideVector, newRotation, slideHit))
-					{
-						//UE_LOG(LogTemp, Warning, TEXT("                 continue slide"));
-
-						double DistanceFromCenter = (slideHit.ImpactPoint - capsuleComponent->GetComponentLocation()).SizeSquared2D();
-						bool bIsInRange = DistanceFromCenter < FMath::Square(capsuleComponent->GetScaledCapsuleRadius() - GROUND_DETECT_RADIUS_TOLERANCE);
-						if (bIsInRange)
-						{
-							if (IsSlopeAngleValid(slideHit.ImpactNormal))
-								PerformWalkUp(slideVector, slideHit, &slideHit);
-						}
-						else
-						{
-
-
-							//THE SLIDE SLOPE MEGA FIX
-
-							if(slideHit.Actor == hit.Actor && hit.ImpactNormal.Z != 0)
-							{
-								FVector correctedTravelDirection = FVector::CrossProduct(slideHit.ImpactNormal, GetGroundPlane()).GetSafeNormal();
-								FVector correctedSlideVector = (newVector * DeltaTime * (1 - hit.Time)).Size() * (FVector::DotProduct(newVector.GetSafeNormal(), correctedTravelDirection)) * correctedTravelDirection;
-
-								UE_LOG(LogTemp, Warning, TEXT("slide fix"));
-								DrawDebugDirectionalArrow(GetWorld(), capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + correctedSlideVector * 100, 4, FColor::Purple, false, 10);
-
-								if (!ResolveAndMove(correctedSlideVector, capsuleComponent->GetComponentQuat(), slideHit))
-								{
-									DistanceFromCenter = (slideHit.ImpactPoint - capsuleComponent->GetComponentLocation()).SizeSquared2D();
-									bIsInRange = DistanceFromCenter < FMath::Square(capsuleComponent->GetScaledCapsuleRadius() - GROUND_DETECT_RADIUS_TOLERANCE);
-									if (bIsInRange)
-									{
-										UE_LOG(LogTemp, Warning, TEXT("DOUBLE CORRECT: %s, %s"), *correctedSlideVector.ToString(), *correctedTravelDirection.ToString());
-										if (IsSlopeAngleValid(slideHit.ImpactNormal))
-											PerformWalkUp(correctedSlideVector, slideHit, &slideHit);
-									}
-								}
-							}
-
-						}
-
-					}
-					*/
 				}
 			}
 		}
@@ -319,78 +225,9 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				//Check if it is ground
 				if (CutOff(outHits[index].ImpactPoint.Z, FLOOR_DETECTION_PERCISION) < CutOff((capsuleComponent->GetComponentLocation() - capsuleComponent->GetUnscaledCapsuleHalfHeight_WithoutHemisphere()).Z, FLOOR_DETECTION_PERCISION))
 				{
-					//DrawDebugDirectionalArrow(GetWorld(), outHits[index].ImpactPoint, outHits[index].ImpactPoint + GetGroundPlane() * 100, 10, FColor::Red, false, 10);
-					// It is ground
-
-					//If we are grounded, preform line trace to get the  normal of the ground we are on. If this line trace does not work, then use
-					//the sweep impact normal as a last resort.
-					/*
-					FHitResult lineTraceHit;
-					FCollisionObjectQueryParams lineObjectParams;
-					lineObjectParams.AddObjectTypesToQuery(ECollisionChannel::ECC_WorldDynamic);
-					lineObjectParams.AddObjectTypesToQuery(ECollisionChannel::ECC_WorldStatic);
-
-					FCollisionQueryParams lineParams(TEXT("line trace"), false, GetOwner());
-					lineParams.bFindInitialOverlaps = true;
-					
-
-					bool bDidHit = GetWorld()->LineTraceSingleByObjectType(lineTraceHit, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() - FVector(0, 0, 1000), lineObjectParams, lineParams);
-					
-					if (bDidHit)
-					{
-						if (lineTraceHit.Actor == outHits[index].Actor)
-						{
-							FVector lineTraceHeading(lineTraceHit.ImpactNormal.X, lineTraceHit.ImpactNormal.Y, 0);
-							FVector outHitsHeading(outHits[index].ImpactNormal.X, outHits[index].ImpactNormal.Y, 0);
-
-							if (FVector::DotProduct(lineTraceHeading.GetSafeNormal(), outHitsHeading.GetSafeNormal()) == -1)
-							{
-								if (IsSlopeAngleValid(lineTraceHit.ImpactNormal))
-								{
-									UE_LOG(LogTemp, Warning, TEXT("LINE NORMAL"));
-									SetGroundPlane(lineTraceHit.ImpactNormal);
-								}
-							}
-						}
-						else
-						{
-							if (IsSlopeAngleValid(outHits[index].ImpactNormal))
-							{
-								UE_LOG(LogTemp, Warning, TEXT("ground normal: %s, %s"), *lineTraceHit.ImpactNormal.ToString(), *outHits[index].ImpactNormal.ToString());
-								SetGroundPlane(outHits[index].ImpactNormal);
-							}
-						}
-					}
-					else if(!bDidHit) 
-					{
-						
-						if (IsSlopeAngleValid(outHits[index].ImpactNormal))
-						{
-							UE_LOG(LogTemp, Warning, TEXT("WHAT:"));
-							SetGroundPlane(outHits[index].ImpactNormal);
-						}
-					}
-					
-					if (!bDidHit)
-					{
-						UE_LOG(LogTemp, Warning, TEXT("WHAT:"));
-					}
-
-					*/
-					/*
-					if (lineTraceHit.ImpactNormal != outHits[index].ImpactNormal)
-					{
-						UE_LOG(LogTemp, Warning, TEXT("ground normal: %s, %s"), *lineTraceHit.ImpactNormal.ToString(), *outHits[index].ImpactNormal.ToString());
-					}
-					*/
-					
-					
-					
+					// Set Ground normal if valid
 					if (IsSlopeAngleValid(outHits[index].ImpactNormal))
 						SetGroundPlane(outHits[index].ImpactNormal);
-					
-
-					//UE_LOG(LogTemp, Warning, TEXT("ground normal: %s"), *GetGroundPlane().ToString());
 					
 					//Floor Magnetism: Keep at a constant distance from the ground when moving
 					if (outHits[index].Distance > MIN_FLOOR_DIST)
@@ -405,28 +242,25 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 				
 			}
 
-			//Ground was not found, so begin falling
+			// Ground was not found, so begin falling
 			if (!bGroundFound)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Set Falling: Not Ground"));
 				moveState = MOVE_STATE::FALLING;
 			}
-			//We are still grounded after move
+			// We are still grounded after move
 			else
 			{
-				//apply ground friction, which slows the player down (in future more complex ground friction could be applied)
 				velocity = FVector::ZeroVector;
 			}
 		}
-		//nothing touching player so they fall
+		// nothing touching player so they fall
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Set Falling: Nothing touching"));
 			moveState = MOVE_STATE::FALLING;
 		}
 	}
 	
-	//Reset the input imformation in preperation for new imformation next tick.
+	// Reset the input information in preperation for new imformation next tick.
 	inputVelocity = FVector::ZeroVector;
 	rotationVelocity = FRotator(0, 0, 0);
 
@@ -452,7 +286,7 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		outParams.AddIgnoredActor(ignoreActor);
 	}
-	//outParams.bTraceComplex = true;
+
 	capsuleComponent->SetWorldRotation(NewRotation);
 	GetWorld()->ComponentSweepMulti(outHits, capsuleComponent, capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + Delta, NewRotation, outParams);
 	
@@ -461,7 +295,6 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	{
 		if (outHits[0].bStartPenetrating)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Start Penetrating"));
 			outHit = outHits[0];
 			return false;
 		}
@@ -487,15 +320,12 @@ bool UTacMoveComp::Move(const FVector& Delta, const FQuat& NewRotation, FHitResu
 	}
 	else
 	{
-		
 		if (bIgnoreInitPenetration)
 			capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * outHit.Time));
 		else
 			capsuleComponent->SetWorldLocation(capsuleComponent->GetComponentLocation() + (Delta * outHit.Time) + (outHit.Normal * TOUCH_TOLERANCE));
 	}
 	
-	
-
 	return bCompleteMove;
 }
 
@@ -522,19 +352,12 @@ bool UTacMoveComp::ResolveAndMove(const FVector& positionDelta, const FQuat& new
 
 bool UTacMoveComp::PerformWalkUp(const FVector& delta, const FHitResult& slopeHit, FHitResult* outHit = NULL)
 {
-	/*
-	FVector flat = FVector(newVector.X, newVector.Y, 0);
-	float dot = hit.ImpactNormal | flat;
-	FVector rampMove = FVector(flat.X, flat.Y, -(dot / hit.ImpactNormal.Z));
-	FVector walkupDelta = rampMove.GetSafeNormal() * (newVector * DeltaTime * (1.0f - hit.Time)).Size();
-	FHitResult tempHit;
-	if (!ResolveAndMove(walkupDelta, capsuleComponent->GetComponentQuat(), tempHit))
-	*/
+	// Calculate walk up delta
 	FVector flatMovement = FVector(delta.X, delta.Y, 0);
 	float groundFlatDeltaDot = slopeHit.ImpactNormal | flatMovement;
 	FVector moveDirection = FVector(flatMovement.X, flatMovement.Y, -(groundFlatDeltaDot / slopeHit.ImpactNormal.Z));
 	FVector walkUpDelta = moveDirection.GetSafeNormal() * (delta * (1.0f - slopeHit.Time)).Size();
-	DrawDebugDirectionalArrow(GetWorld(), capsuleComponent->GetComponentLocation(), capsuleComponent->GetComponentLocation() + walkUpDelta * 1000, 4, FColor::Red, false, 10);
+	
 	if (outHit != NULL)
 		return ResolveAndMove(walkUpDelta,capsuleComponent->GetComponentQuat(),*outHit);
 
@@ -547,49 +370,18 @@ bool UTacMoveComp::SlideAgainstWall(const FVector& delta, const FHitResult& wall
 {
 	//Check if we have a vertical normal
 	FVector wallHeading = FVector(wallHit.ImpactNormal.X, wallHit.ImpactNormal.Y, 0).GetSafeNormal();
-	//UE_LOG(LogTemp, Warning, TEXT("Vertical %s"), *wallHeading.ToString());
-	/*
-		//UE_LOG(LogTemp, Warning, TEXT("Vertical"));
-		FVector traceStart = FVector(capsuleComponent->GetComponentLocation().X, capsuleComponent->GetComponentLocation().Y, wallHit.ImpactPoint.Z);
-		FVector traceEnd = wallHit.ImpactPoint;
-		DrawDebugDirectionalArrow(GetWorld(), traceStart, traceEnd, 4, FColor::Cyan, false, 10);
-		FHitResult lineTraceHit;
-		FCollisionObjectQueryParams lineObjectParams;
-		lineObjectParams.AddObjectTypesToQuery(ECollisionChannel::ECC_WorldDynamic);
-		lineObjectParams.AddObjectTypesToQuery(ECollisionChannel::ECC_WorldStatic);
 
-		FCollisionQueryParams lineParams(TEXT("line trace"), false, GetOwner());
-		lineParams.bFindInitialOverlaps = true;
-		
-
-		bool bDidHit = GetWorld()->LineTraceSingleByObjectType(lineTraceHit, traceStart, traceEnd + (traceEnd - traceStart).GetSafeNormal() * 1, lineObjectParams, lineParams);
-		if (bDidHit && lineTraceHit.Actor == wallHit.Actor)
-		{
-			//DrawDebugDirectionalArrow(GetWorld(), lineTraceHit.ImpactPoint, , 4, FColor::Cyan, false, 10);
-			//UE_LOG(LogTemp, Warning, TEXT("Vertical %s"), *FVector(lineTraceHit.ImpactNormal.X, lineTraceHit.ImpactNormal.Y, 0).GetSafeNormal().ToString(), *wallHeading.ToString());
-			//wallHeading = lineTraceHit.ImpactNormal.GetSafeNormal2D();
-			wallHeading = FVector(lineTraceHit.ImpactNormal.X, lineTraceHit.ImpactNormal.Y, 0).GetSafeNormal();
-			if (wallHeading == FVector::ZeroVector)
-			{
-				return false;
-			}
-		}
-		else
-			return false;
-		
-	*/
 	if (wallHeading == FVector::ZeroVector)
 		return false;
 
+	// Calculate the slide movement Delta
 	const FVector travelDirection = FVector::CrossProduct(wallHeading, GetGroundPlane()).GetSafeNormal();
 	const FVector slideVector = (delta * (1 - wallHit.Time)).Size() * (FVector::DotProduct(delta.GetSafeNormal(), travelDirection)) * travelDirection;
-	
 	
 	FHitResult slideHit;
 	if (!ResolveAndMove(slideVector, capsuleComponent->GetComponentQuat(), slideHit))
 	{
-		//Wall Slide did not complete.
-		//Reason 1: Could have hit a slope.
+		// If a slope is hit, walk up the slope
 		double DistanceFromCenter = (slideHit.ImpactPoint - capsuleComponent->GetComponentLocation()).SizeSquared2D();
 		bool bIsInRange = DistanceFromCenter < FMath::Square(capsuleComponent->GetScaledCapsuleRadius() - GROUND_DETECT_RADIUS_TOLERANCE);
 		if (bIsInRange)
@@ -598,8 +390,8 @@ bool UTacMoveComp::SlideAgainstWall(const FVector& delta, const FHitResult& wall
 				PerformWalkUp(slideVector, slideHit, &slideHit);
 		}
 	}
+
 	return true;
-	
 }
 
 
@@ -609,27 +401,28 @@ bool UTacMoveComp::PerformStepUp(const FVector& delta, const FHitResult& blockin
 	FHitResult sweepHit;
 	//I only want to sweep against the hit actor
 
+	// Perform a sweep downwards inorder to find the top of the hit object.
 	const FVector traceStart(blockingHit.ImpactPoint.X, blockingHit.ImpactPoint.Y,blockingHit.ImpactPoint.Z + capsuleComponent->GetScaledCapsuleHalfHeight() * 2 + maxStepUpHeight);
 	const FVector traceEnd(blockingHit.ImpactPoint.X, blockingHit.ImpactPoint.Y, blockingHit.ImpactPoint.Z - (capsuleComponent->GetScaledCapsuleHalfHeight() * 2 + maxStepUpHeight));
-	//FCollisionQueryParams QueryParams(FName(TEXT("resolve penetration")), true, GetOwner());
-	//DO LINE TRACE
 	bool bDidHit = blockingHit.Component->SweepComponent(sweepHit, traceStart, traceEnd,capsuleComponent->GetComponentQuat(),capsuleComponent->GetCollisionShape());
-	//bool bDidHit = blockingHit.Component->LineTraceComponent(sweepHit, traceStart, traceEnd, QueryParams);
+
+	// Calculate the distance from the top of the object to the bottom of the character
 	float distance = sweepHit.ImpactPoint.Z - (capsuleComponent->GetComponentLocation().Z - capsuleComponent->GetScaledCapsuleHalfHeight());
 
+	// If the distance is less than the maximum step up height, the character may step up.
 	if (bDidHit && (distance <= maxStepUpHeight) && (distance >= 0))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CanStepUP"));
-		//Can step up.
-		//Now we need to make sure space exists large enough for the player to teleport to.
+		// Now we need to make sure space exists large enough for the player to teleport to.
 		// First perform a sweep to see how high up the ledge is.
 		FCollisionQueryParams QueryParams(FName(TEXT("resolve penetration")), true, GetOwner());
 		FCollisionResponseParams ResponseParam;
+		// This is the final destination of the step up
 		FVector destination = FVector(sweepHit.ImpactPoint.X, sweepHit.ImpactPoint.Y,sweepHit.ImpactPoint.Z + capsuleComponent->GetScaledCapsuleHalfHeight() + MIN_FLOOR_DIST);
 		bool bOverlapping = GetWorld()->OverlapBlockingTestByChannel(destination, capsuleComponent->GetComponentQuat(), capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(), QueryParams, ResponseParam);
+		
+		// If something occupies the space we want to step up to, then do not step up.
 		if (!bOverlapping)
 		{
-			
 			capsuleComponent->SetWorldLocation(destination);
 			FHitResult moveHit;
 			ResolveAndMove(delta * (1 - blockingHit.Time), capsuleComponent->GetComponentQuat(), moveHit);
@@ -640,7 +433,7 @@ bool UTacMoveComp::PerformStepUp(const FVector& delta, const FHitResult& blockin
 	return false;
 }
 
-//TODO: This function needs to be enhanced to full function, in particualr handling resolving penetraing two objects.
+
 bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const FHitResult& hit, const FQuat& newRotation)
 {
 	//First we test the proposed location with overlap.
