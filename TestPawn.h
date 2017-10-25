@@ -1,4 +1,8 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+/**
+* Written by Daniel Mann.
+* created in 2017
+* DanielMannGames@outlook.com
+*/
 
 #pragma once
 
@@ -24,7 +28,7 @@ private:
 	void MoveStrafe(float val);
 	void CameraYaw(float val);
 	void CameraPitch(float val);
-
+	void OnEscape();
 	FRotator cameraRotation;
 
 	bool UpdateCamera(float DeltaTime);

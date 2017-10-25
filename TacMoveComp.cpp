@@ -1,4 +1,9 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+/**
+ * Written by Daniel Mann.
+ * created in 2017
+ * DanielMannGames@outlook.com
+ */
+
 
 #include "TacMoveComp.h"
 #include "Components/CapsuleComponent.h"
@@ -7,26 +12,27 @@
 #include <math.h>   
 
 
+const int UTacMoveComp::FLOOR_DETECTION_PERCISION = 4;
+const float UTacMoveComp::PENETRATE_ADITIONAL_SPACING = 0.125;
+const float UTacMoveComp::RESOLVE_STRICTNESS = 0.1;
+const float UTacMoveComp::TOUCH_TOLERANCE = 0.001f;
+
+const float UTacMoveComp::MAX_FLOOR_DIST = 2.4;
+const float UTacMoveComp::MIN_FLOOR_DIST = 1;
+
+const float UTacMoveComp::GROUND_DETECT_RADIUS_TOLERANCE = 0.15;
+
+
 UTacMoveComp::UTacMoveComp()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	maxMoveSpeed = 150;
 	maxRotationSpeed = 100;
 	maxWalkableSlope = PI / 4.0;
-	maxStepUpHeight = 20;
+	maxStepUpHeight = 25;
 	gravity = -1200;
 
 	moveState = MOVE_STATE::FALLING;
-
-	FLOOR_DETECTION_PERCISION = 4;
-	PENETRATE_ADITIONAL_SPACING = 0.125;
-	RESOLVE_STRICTNESS = 0.1;
-	TOUCH_TOLERANCE = 0.001f;
-	
-	MAX_FLOOR_DIST = 2.4;
-	MIN_FLOOR_DIST = 1;
-
-	GROUND_DETECT_RADIUS_TOLERANCE = 0.15;
 
 	bIgnoreInitPenetration = false;
 	SetGroundPlane(FVector(0, 0, 1));
@@ -127,7 +133,7 @@ bool UTacMoveComp::performMovement(float DeltaTime)
 	{
 		//Fist see if we can preform a step up. 
 		bool bDidStepUp = false;
-		if (hit.ImpactNormal.Z == 0 && moveState == MOVE_STATE::WALKING)
+		if (hit.ImpactNormal.Z < KINDA_SMALL_NUMBER && hit.ImpactNormal.Z > -KINDA_SMALL_NUMBER && moveState == MOVE_STATE::WALKING)
 		{
 			bDidStepUp = PerformStepUp(moveDelta, hit);
 		}
@@ -408,14 +414,16 @@ bool UTacMoveComp::PerformStepUp(const FVector& delta, const FHitResult& blockin
 
 	// Calculate the distance from the top of the object to the bottom of the character
 	float distance = sweepHit.ImpactPoint.Z - (capsuleComponent->GetComponentLocation().Z - capsuleComponent->GetScaledCapsuleHalfHeight());
-
+	
 	// If the distance is less than the maximum step up height, the character may step up.
 	if (bDidHit && (distance <= maxStepUpHeight) && (distance >= 0))
 	{
+		
 		// Now we need to make sure space exists large enough for the player to teleport to.
 		// First perform a sweep to see how high up the ledge is.
-		FCollisionQueryParams QueryParams(FName(TEXT("resolve penetration")), true, GetOwner());
+		FCollisionQueryParams QueryParams(FName(TEXT("Step up")), true, GetOwner());
 		FCollisionResponseParams ResponseParam;
+
 		// This is the final destination of the step up
 		FVector destination = FVector(sweepHit.ImpactPoint.X, sweepHit.ImpactPoint.Y,sweepHit.ImpactPoint.Z + capsuleComponent->GetScaledCapsuleHalfHeight() + MIN_FLOOR_DIST);
 		bool bOverlapping = GetWorld()->OverlapBlockingTestByChannel(destination, capsuleComponent->GetComponentQuat(), capsuleComponent->GetCollisionObjectType(), capsuleComponent->GetCollisionShape(), QueryParams, ResponseParam);
@@ -425,7 +433,7 @@ bool UTacMoveComp::PerformStepUp(const FVector& delta, const FHitResult& blockin
 		{
 			capsuleComponent->SetWorldLocation(destination);
 			FHitResult moveHit;
-			ResolveAndMove(delta * (1 - blockingHit.Time), capsuleComponent->GetComponentQuat(), moveHit);
+			//ResolveAndMove(delta * (1 - blockingHit.Time), capsuleComponent->GetComponentQuat(), moveHit);
 			return true;
 		}
 	}
@@ -444,7 +452,7 @@ bool UTacMoveComp::ResolvePenetration(const FVector& proposedAdjustment, const F
 	
 	if (!bOverlapping)
 	{
-		//no overlaps means we can resolve.
+		//no overlaps means we can resolve with teleport.
 		capsuleComponent->SetWorldLocation(hit.TraceStart + proposedAdjustment);
 	}
 	else

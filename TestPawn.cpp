@@ -1,10 +1,15 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+/**
+* Written by Daniel Mann.
+* created in 2017
+* DanielMannGames@outlook.com
+*/
 
 #include "TestPawn.h"
 #include "TacMoveComp.h"
 #include "Components/InputComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "GenericPlatform/GenericPlatformProcess.h"
 
 // Sets default values
 ATestPawn::ATestPawn()
@@ -56,6 +61,7 @@ void ATestPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 	PlayerInputComponent->BindAxis("Strafe", this, &ATestPawn::MoveStrafe);
 	PlayerInputComponent->BindAxis("Yaw", this, &ATestPawn::CameraYaw);
 	PlayerInputComponent->BindAxis("Pitch", this, &ATestPawn::CameraPitch);
+	PlayerInputComponent->BindAction("Exit", IE_Pressed, this, &ATestPawn::OnEscape);
 
 	
 
@@ -85,6 +91,12 @@ void ATestPawn::CameraPitch(float val)
 	
 	cameraRotation += FRotator(val * moveComponent->maxRotationSpeed, 0, 0);
 
+}
+
+void ATestPawn::OnEscape()
+{
+	//GetWorld()->GetFirstPlayerController()->ConsoleCommand("quit");
+	FGenericPlatformMisc::RequestExit(false);
 }
 
 bool ATestPawn::UpdateCamera(float DeltaTime)
