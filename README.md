@@ -7,6 +7,7 @@ Features:
 2. Movement up slopes.
 3. Stepping up onto low objects.
 4. Slidding down over steep hills.
+5. Falling
 
 Download and play showcase level:
 W A S D moves.
